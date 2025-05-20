@@ -1,0 +1,79 @@
+{
+  "query": "Complete HTML course full oneshot",
+  "timestamp": "2025-05-20T10:43:36.848035",
+  "filters": {
+    "limit": 5,
+    "content_type": null,
+    "min_duration": null,
+    "max_duration": null
+  },
+  "results": {
+    "query": "Complete HTML course full oneshot",
+    "results": [
+      {
+        "id": "HcOc7P5BMi4",
+        "title": "HTML Tutorial for Beginners | Complete HTML with Notes \\u0026 Code",
+        "channel": {
+          "name": "Apna College"
+        },
+        "url": "https://www.youtube.com/watch?v=HcOc7P5BMi4",
+        "type": "video",
+        "likes": 433538,
+        "likes_formatted": "433.5K",
+        "views": 22282919,
+        "views_formatted": "22.3M"
+      },
+      {
+        "id": "k7ELO356Npo",
+        "title": "Complete HTML Tutorial in 1 Video 2024",
+        "channel": {
+          "name": "CodeHelp - by Babbar"
+        },
+        "url": "https://www.youtube.com/watch?v=k7ELO356Npo",
+        "type": "video",
+        "likes": 19974,
+        "likes_formatted": "20K",
+        "views": 1054270,
+        "views_formatted": "1.1M"
+      },
+      {
+        "id": "k2DSi1zGEc8",
+        "title": "HTML Full Course (in Hindi)",
+        "channel": {
+          "name": "CodeWithHarry"
+        },
+        "url": "https://www.youtube.com/watch?v=k2DSi1zGEc8",
+        "type": "video",
+        "likes": 26217,
+        "likes_formatted": "26.2K",
+        "views": 1047292,
+        "views_formatted": "1M"
+      },
+      {
+        "id": "5ccq_nLHneE",
+        "title": "HTML Complete Tutorial for Beginners in Hindi🔥Free Notes + Codes",
+        "channel": {
+          "name": "Thapa Technical"
+        },
+        "url": "https://www.youtube.com/watch?v=5ccq_nLHneE",
+        "type": "video"
+      },
+      {
+        "id": "-78HK6tlpWw",
+        "title": "Kunali ko Gharse Nikal Diya 😲",
+        "channel": {
+          "name": "Sourav Joshi Vlogs"
+        },
+        "url": "https://www.youtube.com/watch?v=-78HK6tlpWw",
+        "type": "video"
+      }
+    ],
+    "result_count": 5,
+    "source": "web_fallback"
+  },
+  "metadata": {
+    "timestamp": "2025-05-20T10:43:40.616305",
+    "source": "YouTube API",
+    "version": "1.0"
+  }
+}
