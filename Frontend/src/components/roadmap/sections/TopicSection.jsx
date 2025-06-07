@@ -58,7 +58,13 @@ const TopicSection = ({
             {decodeUnicode(topic.video.title)}
           </h3>
           <div className="flex items-center space-x-2 text-gray-600">
-            <span>By: {topic.video.channel}</span>
+            <span>By: {
+              // Try all possible locations for channel name
+              topic.video.channel || 
+              (typeof topic.video.videos?.[0]?.channel === 'string' ? topic.video.videos[0].channel : 
+               topic.video.videos?.[0]?.channel?.name) || 
+              "Unknown"
+            }</span>
             {isPlaylist && (
               <span 
                 className="text-sm px-2 py-0.5 rounded-full font-medium text-white"

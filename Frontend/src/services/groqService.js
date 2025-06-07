@@ -1,12 +1,13 @@
 // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_API_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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'
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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'
 ];
 
 let currentKeyIndex = 0;

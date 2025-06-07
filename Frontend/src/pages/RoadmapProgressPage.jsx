@@ -374,23 +374,46 @@ const RoadmapProgressPage = () => {
                   <div className="p-6">
                     {/* Topics */}
                     <div className="space-y-8">
-                      {section.topics.map((topic, topicIndex) => (
-                        <TopicSection
-                          key={topicIndex}
-                          topic={topic}
-                          completedVideos={completedVideos}
-                          videoNotes={videoNotes}
-                          onToggleVideoComplete={toggleVideoCompletion}
-                          onPlayVideo={openVideoModal}
-                          onAddNote={openNoteModal}
-                          onPlaylistClick={handlePlaylistClick}
-                        />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                      {section.topics.map((topic, topicIndex) => {
+                        // Debug the structure
+                        if (topic.video && topic.video.videos && topic.video.videos.length > 0) {
+                          console.log("Topic video data:", {
+                            playlistTitle: topic.video.title,
+                            playlistChannel: topic.video.channel,
+                            firstVideoChannel: topic.video.videos[0]?.channel,
+                            firstVideoChannelName: topic.video.videos[0]?.channel?.name
+                          });
+                          
+                          // Fix: Check if channel is directly in videos[0].channel (not nested in name)
+                          if (!topic.video.channel) {
+                            if (typeof topic.video.videos[0]?.channel === 'string') {
+                              topic.video.channel = topic.video.videos[0].channel;
+                            } else if (topic.video.videos[0]?.channel?.name) {
+                              topic.video.channel = topic.video.videos[0].channel.name;
+                            } else {
+                              topic.video.channel = "Unknown";
+                            }
+                          }
+                        }
+                        
+                        return (
+                          <TopicSection
+                            key={topicIndex}
+                            topic={topic}
+                            completedVideos={completedVideos}
+                            videoNotes={videoNotes}
+                            onToggleVideoComplete={toggleVideoCompletion}
+                            onPlayVideo={openVideoModal}
+                            onAddNote={openNoteModal}
+                            onPlaylistClick={handlePlaylistClick}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Action Buttons */}

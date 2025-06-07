@@ -1002,17 +1002,30 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
         return None
     
     scored_playlists = []
-    max_evaluation_attempts = 10  # Limit evaluation attempts to avoid excessive API calls
+    max_evaluation_attempts = 6  # Limit evaluation attempts to 6 playlists
     
-    # Step 2: Evaluate each playlist
-    for i, playlist_summary in enumerate(playlists):
-        if i >= max_evaluation_attempts:
-            if debug:
-                print(f"Reached maximum evaluation attempts limit ({max_evaluation_attempts})")
-            break
-            
+    # Import ThreadPoolExecutor for parallel processing
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    
+    # Create a lock for thread-safe operations
+    score_lock = threading.Lock()
+    exceptional_found_lock = threading.Lock()
+    exceptional_found = False
+    
+    # Define a function to evaluate a single playlist
+    def evaluate_playlist(playlist_summary, idx):
+        nonlocal exceptional_found
+        
+        # Check if we should skip due to exceptional playlist already found
+        with exceptional_found_lock:
+            if exceptional_found:
+                if debug:
+                    print(f"Skipping playlist {idx+1} as exceptional playlist already found")
+                return None
+        
         if debug:
-            print(f"\n📑 Evaluating playlist {i+1}/{len(playlists)}: {playlist_summary['title']}")
+            print(f"\n📑 Evaluating playlist {idx+1}/{len(playlists[:max_evaluation_attempts])}: {playlist_summary['title']}")
         
         playlist_id = playlist_summary['id']
         
@@ -1031,44 +1044,98 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                 
             videos = playlist.get("videos", [])
             
-            # Skip if not enough videos with details
-            if len(videos) < 5:
-                if debug:
-                    print(f"❌ Skipping: Insufficient videos ({len(videos)}/5 minimum)")
-                continue
+            # Note about video count but don't skip
+            if len(videos) < 5 and debug:
+                print(f"⚠️ Note: This playlist has fewer videos than recommended ({len(videos)}/5 minimum)")
                 
+            # First, check title relevance with Groq before full scoring
+            if USE_GROQ and debug:
+                print(f"Checking title relevance with Groq: '{playlist['title']}'")
+                
+            groq_result = check_title_relevance_with_groq(playlist["title"], query) if USE_GROQ else None
+            
+            if groq_result:
+                is_relevant, confidence, explanation = groq_result
+                
+                # Enhanced logging for relevance check
+                if debug:
+                    print(f"Groq relevance check: {is_relevant} (confidence: {confidence:.2f})")
+                    print(f"  Explanation: {explanation}")
+                    print(f"  IMPORTANT - Is this playlist relevant to '{query}'? {'YES' if is_relevant else 'NO'}")
+                
+                # Early rejection: Skip this playlist if Groq says it's not relevant
+                if not is_relevant:
+                    if debug:
+                        print(f"❌ Skipping: Groq determined this playlist is not relevant to '{query}'")
+                        print(f"   Reason: {explanation}")
+                    return None
+            
             # Step 3: Apply scoring criteria
             try:
                 score, details = score_playlist(playlist, query, debug)
                 
                 if score is not None:
-                    scored_playlists.append({
+                    result = {
                         "playlist": playlist,
                         "score": score,
                         "details": details,
                         "verdict": get_verdict(score)
-                    })
+                    }
+                    
+                    # Thread-safe update of scored_playlists
+                    with score_lock:
+                        scored_playlists.append(result)
                     
                     if debug:
                         print(f"✅ Final Score: {score:.1f}/10.0")
                         
-                    # If we find an exceptional playlist, stop searching
+                    # If we find an exceptional playlist, mark it so other threads can stop
                     if score >= 8.0:
                         if debug:
-                            print(f"🔥 Found EXCEPTIONAL playlist! Stopping search.")
-                        break
+                            print(f"🔥 Found EXCEPTIONAL playlist! Notifying other threads.")
+                        with exceptional_found_lock:
+                            exceptional_found = True
+                    
+                    return result
             except Exception as e:
                 if debug:
                     print(f"Error scoring playlist: {e}")
                     import traceback
                     traceback.print_exc()
-                continue
+                return None
         except Exception as e:
             if debug:
                 print(f"Error evaluating playlist {playlist_id}: {e}")
                 import traceback
                 traceback.print_exc()
-            continue
+            return None
+    
+    # Step 2: Evaluate playlists in parallel
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit tasks for each playlist (limited to max_evaluation_attempts)
+        future_to_playlist = {
+            executor.submit(evaluate_playlist, playlist, i): (playlist, i) 
+            for i, playlist in enumerate(playlists[:max_evaluation_attempts])
+        }
+        
+        # Process results as they complete
+        for future in as_completed(future_to_playlist):
+            playlist_info, idx = future_to_playlist[future]
+            try:
+                result = future.result()
+                # Result is already added to scored_playlists in the evaluate_playlist function
+                
+                # Check if we should cancel remaining tasks due to exceptional playlist
+                if exceptional_found:
+                    if debug:
+                        print(f"Exceptional playlist found. Cancelling remaining evaluations.")
+                    # Cancel any pending futures
+                    for f in future_to_playlist:
+                        if not f.done() and not f.running():
+                            f.cancel()
+            except Exception as e:
+                if debug:
+                    print(f"Error processing result for playlist {idx+1}: {e}")
     
     # Step 4: Sort playlists by score and return the best one
     if scored_playlists:
@@ -1122,22 +1189,38 @@ def check_title_relevance_with_groq(title, query):
             context = ssl._create_unverified_context()
             conn = http.client.HTTPSConnection(GROQ_API_HOST, context=context)
             
+            # Extract the main topic from the query
+            main_topic = None
+            query_terms = query.lower().split()
+            for term in query_terms:
+                if term not in ["complete", "full", "course", "tutorial", "for", "beginners", "advanced", "learn", "the"]:
+                    main_topic = term
+                    break
+            
             # Prepare the prompt
-            prompt = f"""Analyze if this YouTube playlist title is relevant to the technology/topic.
+            prompt = f"""Analyze if this YouTube playlist title is SPECIFICALLY relevant to the technology/topic.
 
 Playlist title: "{title}"
 User search query: "{query}"
+Main topic: "{main_topic}"
 
 Rules:
-1. The title must contain the technology/topic name or a common abbreviation (e.g., JS for JavaScript).
-2. Ignore modifiers like "Top 10", "Best" unless paired with the topic name.
-3. Consider if this would be a tutorial or educational content about the topic.
+1. The title MUST contain the SPECIFIC technology/topic name or a common abbreviation (e.g., CSS for Cascading Style Sheets).
+2. General web development courses are NOT relevant for specific topics like CSS, JavaScript, React, etc.
+3. For a CSS query, the playlist should be specifically about CSS, not general web development.
+4. Reject titles that are too broad when the query is for a specific technology.
+5. Be STRICT - only accept playlists that are clearly focused on the main topic.
 
 Return JSON with these fields:
 - is_relevant: true/false
 - confidence: number from 0-1
 - explanation: brief reasoning for decision
 """
+
+            print(f"DEBUG - GROQ RELEVANCE CHECK PROMPT:")
+            print(f"========================================")
+            print(prompt)
+            print(f"========================================")
             
             # Set up headers
             headers = {
@@ -1176,11 +1259,19 @@ Return JSON with these fields:
             data = json.loads(response.read().decode())
             try:
                 content = data["choices"][0]["message"]["content"]
+                
+                print(f"DEBUG - GROQ RELEVANCE CHECK RESPONSE:")
+                print(f"========================================")
+                print(content)
+                print(f"========================================")
+                
                 result = json.loads(content)
                 
                 is_relevant = result.get("is_relevant", False)
                 confidence = result.get("confidence", 0.0)
                 explanation = result.get("explanation", "No explanation provided")
+                
+                print(f"DEBUG - FINAL RELEVANCE DECISION: {'RELEVANT' if is_relevant else 'NOT RELEVANT'} (confidence: {confidence:.2f})")
                 
                 return (is_relevant, confidence, explanation)
             except (json.JSONDecodeError, KeyError, IndexError) as e:
@@ -1478,10 +1569,10 @@ def score_playlist(playlist, query, debug=False):
     elif debug:
         print(f"✓ Passed title relevance check: {relevance_explanation}")
     
-    # Ensure we have enough videos
-    if len(videos) < 5:
+    # Ensure we have at least one video
+    if len(videos) < 1:
         if debug:
-            print(f"❌ Insufficient videos: {len(videos)}/5 minimum required")
+            print(f"❌ No videos found in playlist")
         return None, None
     
     # 🧮 Start scoring the playlist
@@ -1492,7 +1583,7 @@ def score_playlist(playlist, query, debug=False):
         video_count_score = 1.5
     elif video_count > 10:
         video_count_score = 1.0
-    else:  # 5-10 videos
+    else:  # 1-10 videos
         video_count_score = 0.5
     
     details["video_count_score"] = video_count_score

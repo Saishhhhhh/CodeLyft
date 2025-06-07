@@ -2,13 +2,14 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 console.log('Using API URL:', API_URL); // Debug log
 // Replace the single API key with an array of keys
 const GROQ_API_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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'
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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'
 ];
 
 let currentKeyIndex = 0;
@@ -1240,11 +1241,33 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       playlistScore = bestPlaylistResult.score;
       console.log(`Found playlist: ${bestPlaylistResult.playlist.title} (Score: ${playlistScore}/10)`);
       
+      // Get channel name from the first video if playlist channel is null
+      const firstVideo = bestPlaylistResult.playlist.videos?.[0];
+      let channelName = "Unknown";
+      
+      // Try all possible locations for channel name
+      if (bestPlaylistResult.playlist.channel) {
+        channelName = bestPlaylistResult.playlist.channel;
+      } else if (firstVideo) {
+        if (typeof firstVideo.channel === 'string') {
+          channelName = firstVideo.channel;
+        } else if (firstVideo.channel?.name) {
+          channelName = firstVideo.channel.name;
+        }
+      }
+      
+      console.log("Channel name extraction:", {
+        playlistChannel: bestPlaylistResult.playlist.channel,
+        firstVideoChannel: firstVideo?.channel,
+        extractedChannelName: channelName
+      });
+      
       // Format the playlist data to match the format expected by the UI
       bestPlaylist = {
         ...bestPlaylistResult.playlist,
         videoCount: bestPlaylistResult.playlist.video_count,
         totalVideoCount: bestPlaylistResult.playlist.video_count,
+        channel: channelName, // Use the extracted channel name
         rating: bestPlaylistResult.score?.toFixed(1) || "N/A",
         isPlaylist: true,
         quality: bestPlaylistResult.score >= 8.0 ? 'Exceptional' : 
@@ -1302,38 +1325,61 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         // Rate all videos and find the best match
         if (searchResult?.results?.length > 0) {
           try {
-            // Fetch detailed information for each video
-            const videoDetailsPromises = searchResult.results.map(async (video) => {
-              try {
-                // Skip if it's a fallback video
-                if (video.fallback) return video;
-
-                // Fetch video details including duration
-                const details = await getVideoDetails(video.url);
-                if (details) {
-                  // Merge the details with the video object
-                  return {
-                    ...video,
-                    duration: details.duration,
-                    duration_seconds: details.duration_seconds,
-                    views: details.views,
-                    likes: details.likes,
-                    channel: details.channel,
-                    publish_date: details.publish_date
-                  };
+            console.log(`Found ${searchResult.results.length} videos, fetching details in parallel...`);
+            
+            // Maximum number of concurrent requests to avoid overwhelming the API
+            const MAX_CONCURRENT_REQUESTS = 5;
+            const videosToProcess = [...searchResult.results];
+            const processedVideos = [];
+            
+            // Process videos in batches for parallel fetching
+            while (videosToProcess.length > 0) {
+              const currentBatch = videosToProcess.splice(0, MAX_CONCURRENT_REQUESTS);
+              console.log(`Processing batch of ${currentBatch.length} videos in parallel`);
+              
+              // Create promises for each video in the current batch
+              const batchPromises = currentBatch.map(async (video) => {
+                try {
+                  // Skip if it's a fallback video
+                  if (video.fallback) return video;
+                  
+                  // Fetch video details including duration
+                  console.log(`Fetching details for: ${video.title}`);
+                  const details = await getVideoDetails(video.url);
+                  
+                  if (details) {
+                    // Merge the details with the video object
+                    return {
+                      ...video,
+                      duration: details.duration,
+                      duration_seconds: details.duration_seconds,
+                      views: details.views,
+                      likes: details.likes,
+                      channel: details.channel,
+                      publish_date: details.publish_date
+                    };
+                  }
+                  return video;
+                } catch (error) {
+                  console.error(`Error fetching details for video ${video.url}:`, error);
+                  return video;
                 }
-                return video;
-              } catch (error) {
-                console.error(`Error fetching details for video ${video.url}:`, error);
-                return video;
+              });
+              
+              // Wait for all videos in this batch to complete
+              const batchResults = await Promise.all(batchPromises);
+              processedVideos.push(...batchResults);
+              
+              // Small delay between batches to avoid overwhelming the API
+              if (videosToProcess.length > 0) {
+                await new Promise(resolve => setTimeout(resolve, 500));
               }
-            });
-
-            // Wait for all video details to be fetched
-            const videosWithDetails = await Promise.all(videoDetailsPromises);
-
+            }
+            
+            console.log(`Finished fetching details for ${processedVideos.length} videos`);
+            
             // Rate the videos with complete information
-            for (const video of videosWithDetails) {
+            const ratingPromises = processedVideos.map(async (video) => {
               // Add topic relevance term for title matching
               video.topicRelevanceTerm = searchConfig.relevanceTerm;
               
@@ -1360,7 +1406,15 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
               }
               video.durationMinutes = durationMinutes;
               
-              if (rating > 0) { // Only log videos that passed the filters
+              return { video, rating, durationMinutes };
+            });
+            
+            // Wait for all ratings to complete
+            const ratingResults = await Promise.all(ratingPromises);
+            
+            // Find the highest rated video
+            for (const { video, rating, durationMinutes } of ratingResults) {
+              if (rating > 0) { // Only consider videos that passed the filters
                 console.log(`${searchConfig.isOneShot ? 'OneShot' : 'Regular'} - ${video.title} - Rating: ${rating.toFixed(1)}/6 - Duration: ${durationMinutes} minutes`);
               
                 // Select the video with the highest rating

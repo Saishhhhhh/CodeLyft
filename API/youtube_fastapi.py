@@ -138,7 +138,7 @@ async def search_playlists_endpoint(
 async def find_best_playlist_endpoint(
     query: str = Query(..., description="Topic to find the best educational playlist for"),
     debug: bool = Query(False, description="Enable detailed scoring and debug output"),
-    max_videos: int = Query(20, description="Maximum number of videos to include in the response (0 for all)")
+    max_videos: int = Query(0, description="Maximum number of videos to include in the response (0 for all)")
 ):
     """Find the best educational playlist for a specific topic based on comprehensive scoring criteria"""
     try:
@@ -348,7 +348,7 @@ async def find_best_playlist_endpoint(
             Youtube.get_playlist_videos = original_get_playlist_videos
             
             # Log how many playlists were evaluated
-            logger.info(f"Evaluated {current_playlist_index} playlists in {elapsed_time:.2f}s")
+            logger.info(f"Evaluated {current_playlist_index} playlists in {elapsed_time:.2f}s using parallel processing")
             
             # Handle case where no suitable playlist was found
             if result is None or not isinstance(result, dict):
@@ -358,7 +358,8 @@ async def find_best_playlist_endpoint(
                     "message": "No suitable playlists found for this query",
                     "query": query,
                     "elapsed_seconds": elapsed_time,
-                    "playlists_evaluated": current_playlist_index
+                    "playlists_evaluated": current_playlist_index,
+                    "parallel_processing": True
                 }
                 
             # Clean any repeated titles in the result
@@ -372,7 +373,7 @@ async def find_best_playlist_endpoint(
             # Log the best playlist details
             logger.info(f"Best playlist found in {elapsed_time:.2f}s: '{winning_playlist.get('title', 'Unknown')}'")
             logger.info(f"URL: {winning_playlist.get('url', 'Unknown')}")
-            logger.info(f"Channel: {winning_playlist.get('channel', 'Unknown')}")
+            logger.info(f"Channel: {winning_playlist.get('channel', {}).get('name', 'Unknown')}")
             logger.info(f"Videos: {len(winning_playlist.get('videos', []))}")
             logger.info(f"Score: {winning_score}/10.0 - Verdict: {winning_verdict}")
             
@@ -390,6 +391,7 @@ async def find_best_playlist_endpoint(
                 "query": query,
                 "elapsed_seconds": elapsed_time,
                 "playlists_evaluated": current_playlist_index,
+                "parallel_processing": True,
             "playlist": {
                     "id": winning_playlist.get("id"),
                     "title": winning_playlist.get("title"),
