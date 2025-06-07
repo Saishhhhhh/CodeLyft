@@ -212,27 +212,11 @@ def search_youtube(query, limit=10, content_type=None, min_duration=None, max_du
                 except json.JSONDecodeError:
                     print(f"Error parsing JSON: {line}")
             
-            # Get detailed info including likes for videos only
-            detailed_results = []
-            for i, item in enumerate(videos):
-                try:
-                    if i < 5 and item.get("type") == "video":
-                        details = get_video_details(item["id"])
-                        if "likes" in details:
-                            item["likes"] = details["likes"]
-                            item["likes_formatted"] = details["likes_formatted"]
-                        if "views" in details:
-                            item["views"] = details["views"]
-                            item["views_formatted"] = details["views_formatted"]
-                    detailed_results.append(item)
-                except Exception as e:
-                    print(f"Error getting details for {item['id']}: {e}")
-                    detailed_results.append(item)
-            
+            # Return results directly without fetching detailed info
             return {
                 "query": query,
-                "results": detailed_results,
-                "result_count": len(detailed_results),
+                "results": videos,
+                "result_count": len(videos),
                 "source": "yt-dlp"
             }
         except Exception as e:
@@ -256,6 +240,17 @@ def get_video_details(video_id_or_url):
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout.strip())
             
+            # Process the publish date to ensure we have a usable format
+            publish_date = data.get("upload_date", "")
+            # If we have a date in YYYYMMDD format, format it more clearly
+            if publish_date and publish_date.isdigit() and len(publish_date) == 8:
+                year = publish_date[:4]
+                month = publish_date[4:6]
+                day = publish_date[6:8]
+                publish_date_formatted = f"{year}-{month}-{day}"
+            else:
+                publish_date_formatted = publish_date
+            
             return {
                 "id": data.get("id", ""),
                 "title": data.get("title", "Unknown"),
@@ -266,7 +261,8 @@ def get_video_details(video_id_or_url):
                 },
                 "description": data.get("description", ""),
                 "thumbnail": data.get("thumbnail", ""),
-                "publish_date": data.get("upload_date", ""),
+                "publish_date": publish_date,
+                "publish_date_formatted": publish_date_formatted,
                 "duration": data.get("duration", 0),
                 "duration_string": data.get("duration_string", ""),
                 "views": data.get("view_count", 0),
@@ -379,69 +375,49 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
             print(f"Fetching playlist using CustomPlaylist: {playlist_id}")
             playlist = CustomPlaylist(playlist_id)
             
-            # Get first batch of videos
-            if not playlist.videos:
-                print("No videos found in playlist")
-                return {
-                    "id": playlist_id,
-                    "title": playlist.info.get('title', 'Unknown Playlist'),
-                    "url": playlist_url,
-                    "videos": [],
-                    "video_count": 0,
-                    "source": "custom_playlist"
-                }
-            
-            # Fetch more if available and needed
-            fetched = len(playlist.videos)
-            
-            # Set a safety limit if no limit was specified
-            effective_limit = limit if limit > 0 else MAX_VIDEOS_SAFETY
-            
-            # Track fetch attempts and start time
-            fetch_attempts = 0
-            start_time = datetime.now()
-            
-            # Fetch videos in batches
-            while (limit == 0 and fetched < MAX_VIDEOS_SAFETY or fetched < limit) and playlist.hasMoreVideos:
-                # Safety checks to prevent infinite loops
-                if fetch_attempts >= MAX_FETCH_ATTEMPTS:
-                    print(f"Reached maximum fetch attempts ({MAX_FETCH_ATTEMPTS}), stopping.")
-                    break
-                    
-                time_elapsed = (datetime.now() - start_time).total_seconds()
-                if time_elapsed > FETCH_TIMEOUT_SECONDS:
-                    print(f"Fetching videos took too long ({time_elapsed:.1f} seconds), stopping.")
-                    break
+            # Use asyncio to directly fetch all videos using our fetch_playlist method
+            import asyncio
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                success = loop.run_until_complete(playlist.fetch_playlist())
+                loop.close()
                 
-                print(f"Fetched {fetched} videos so far, getting next batch... (Attempt {fetch_attempts+1}/{MAX_FETCH_ATTEMPTS})")
+                if not success or not playlist.videos:
+                    print("Error fetching playlist or no videos found")
+                    return {
+                        "id": playlist_id,
+                        "title": playlist.info.get('title', 'Unknown Playlist'),
+                        "url": playlist_url,
+                        "videos": [],
+                        "video_count": 0,
+                        "source": "custom_playlist"
+                    }
+            except Exception as e:
+                print(f"Error running async fetch_playlist: {e}")
+                import traceback
+                traceback.print_exc()
                 
-                # Fetch next batch of videos
-                try:
-                    playlist.getNextVideos(batch_size=BATCH_SIZE)
-                    new_fetched = len(playlist.videos)
-                    
-                    # If no new videos were fetched, break the loop
-                    if new_fetched == fetched:
-                        print("No more videos available in playlist")
-                        break
-                        
-                    fetched = new_fetched
-                    fetch_attempts += 1
-                    
-                    # Add a small delay between batches to avoid rate limiting
-                    time.sleep(1)
-                    
-                except Exception as e:
-                    print(f"Error fetching batch of videos: {e}")
-                    break
-                
-                if limit == 0 and fetched >= MAX_VIDEOS_SAFETY:
-                    print(f"Reached safety limit of {MAX_VIDEOS_SAFETY} videos. Use a specific limit to fetch more.")
-                    break
+                # If we failed to fetch videos with the async method, try the regular method
+                if not playlist.videos:
+                    print("No videos found in playlist")
+                    return {
+                        "id": playlist_id,
+                        "title": playlist.info.get('title', 'Unknown Playlist'),
+                        "url": playlist_url,
+                        "videos": [],
+                        "video_count": 0,
+                        "source": "custom_playlist"
+                    }
+            
+            # If we have a limit, respect it
+            if limit > 0 and len(playlist.videos) > limit:
+                playlist.videos = playlist.videos[:limit]
+                print(f"Limited videos to {limit} as requested")
             
             # Format the videos to match our expected structure
             formatted_videos = []
-            for i, video in enumerate(playlist.videos[:limit] if limit > 0 else playlist.videos):
+            for i, video in enumerate(playlist.videos):
                 formatted_video = {
                     "id": video.get("id", ""),
                     "title": video.get("title", "Unknown"),
@@ -489,6 +465,12 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                 except Exception as e:
                     print(f"Failed to get playlist title from yt-dlp: {e}")
             
+            # Clean up the playlist title (remove repetitions)
+            if playlist_title and '\n' in playlist_title:
+                # If the title contains newlines, it might be repeated
+                # Take only the first line
+                playlist_title = playlist_title.split('\n')[0].strip()
+            
             # Add direct view count to the result if available
             result = {
                 "id": playlist_id,
@@ -507,6 +489,8 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
             return result
         except Exception as e:
             print(f"CustomPlaylist error: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Try yt-dlp if CustomPlaylist isn't available or failed
     if check_yt_dlp():
@@ -547,9 +531,8 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
             
             # Get detailed info for ONLY the first video (if available)
             if videos and max_details > 0:
+                first_video = videos[0]
                 try:
-                    first_video = videos[0]
-                    print(f"Getting details for first video: {first_video['title'][:30]}...")
                     details = get_video_details(first_video["id"])
                     if "likes" in details:
                         first_video["likes"] = details["likes"]
@@ -557,11 +540,6 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                     if "views" in details:
                         first_video["views"] = details["views"]
                         first_video["views_formatted"] = details["views_formatted"]
-                    if "publish_date" in details:
-                        first_video["publish_date"] = details["publish_date"]
-                    if "duration" in details:
-                        first_video["duration_seconds"] = details["duration"]
-                        first_video["duration_string"] = details["duration_string"]
                 except Exception as e:
                     print(f"Error getting details for first video: {e}")
             
@@ -686,9 +664,11 @@ def get_direct_playlist_views(playlist_url, debug=False):
         
         # Save larger portion of HTML for more detailed debugging
         if debug:
-            with open('playlist_html_debug.txt', 'w', encoding='utf-8') as f:
-                f.write(html)  # Save the entire HTML
-            print(f"Saved entire playlist HTML to playlist_html_debug.txt")
+            # Commenting out file writing operations
+            # with open('playlist_html_debug.txt', 'w', encoding='utf-8') as f:
+            #     f.write(html)  # Save the entire HTML
+            # print(f"Saved entire playlist HTML to playlist_html_debug.txt")
+            pass
         
         # Try multiple patterns that might contain playlist view count
         patterns = [
@@ -837,27 +817,11 @@ def search_youtube_web(query, limit=10, content_type=None, min_duration=None, ma
                 }
                 videos.append(playlist)
         
-        # Get detailed info for videos
-        detailed_results = []
-        for i, item in enumerate(videos):
-            try:
-                if i < 3 and item.get("type") == "video":
-                    details = get_video_details(item["id"])
-                    if "likes" in details:
-                        item["likes"] = details["likes"]
-                        item["likes_formatted"] = details["likes_formatted"]
-                    if "views" in details:
-                        item["views"] = details["views"]
-                        item["views_formatted"] = details["views_formatted"]
-                detailed_results.append(item)
-            except Exception as e:
-                print(f"Error getting details for {item['id']}: {e}")
-                detailed_results.append(item)
-        
+        # Return results directly without fetching detailed info
         return {
             "query": query,
-            "results": detailed_results,
-            "result_count": len(detailed_results),
+            "results": videos,
+            "result_count": len(videos),
             "source": "web_fallback"
         }
     except Exception as e:
@@ -896,9 +860,9 @@ def search_playlists(query, limit=10):
         with urllib.request.urlopen(req) as response:
             html = response.read().decode('utf-8')
         
-        # Save HTML for debugging
-        with open('youtube_search.html', 'w', encoding='utf-8') as f:
-            f.write(html)
+        # Save HTML for debugging - commented out to prevent file creation
+        # with open('youtube_search.html', 'w', encoding='utf-8') as f:
+        #     f.write(html)
         
         # Try to extract playlist data using regex
         playlists = []
@@ -1000,13 +964,14 @@ def search_playlists(query, limit=10):
             "error": str(e)
         }
 
-def find_best_playlist(query, debug=False):
+def find_best_playlist(query, debug=False, detailed_fetch=False):
     """
     Find the best playlist for a specific topic based on comprehensive scoring criteria
     
     Args:
         query: Search query for the topic
         debug: If True, print detailed scoring info
+        detailed_fetch: If True, fetch more details for more accurate scoring
         
     Returns:
         dict: Best playlist with scores and details or None if no suitable playlist found
@@ -1014,19 +979,38 @@ def find_best_playlist(query, debug=False):
     if debug:
         print(f"\n🔍 Searching for best playlist on: '{query}'")
         
-    # Step 1: Get multiple playlists related to the query
-    search_results = search_playlists(query, limit=12)
-    playlists = search_results.get("results", [])
-    
-    if not playlists:
+    if not query or query.strip() == "":
         if debug:
-            print("No playlists found for this query.")
+            print("Empty query provided. Cannot search for playlists.")
+        return None
+        
+    # Step 1: Get multiple playlists related to the query
+    try:
+        search_results = search_playlists(query, limit=12)
+        playlists = search_results.get("results", [])
+        
+        if not playlists:
+            if debug:
+                print("No playlists found for this query.")
+            return None
+            
+        if debug:
+            print(f"Found {len(playlists)} playlists for query: '{query}'")
+    except Exception as e:
+        if debug:
+            print(f"Error searching for playlists: {e}")
         return None
     
     scored_playlists = []
+    max_evaluation_attempts = 10  # Limit evaluation attempts to avoid excessive API calls
     
     # Step 2: Evaluate each playlist
     for i, playlist_summary in enumerate(playlists):
+        if i >= max_evaluation_attempts:
+            if debug:
+                print(f"Reached maximum evaluation attempts limit ({max_evaluation_attempts})")
+            break
+            
         if debug:
             print(f"\n📑 Evaluating playlist {i+1}/{len(playlists)}: {playlist_summary['title']}")
         
@@ -1034,8 +1018,17 @@ def find_best_playlist(query, debug=False):
         
         # Get detailed playlist information with videos
         try:
-            # Only fetch detailed info for the first video to improve performance
-            playlist = get_playlist_videos(playlist_id, limit=0, max_details=1)
+            # Determine how many videos to fetch detailed info for
+            # If detailed_fetch is True, fetch more details for better scoring
+            max_details_count = 5 if detailed_fetch else 1
+            
+            # Fetch playlist data
+            playlist = get_playlist_videos(playlist_id, limit=0, max_details=max_details_count)
+            
+            # Handle playlist title repetition
+            if "title" in playlist and '\n' in playlist["title"]:
+                playlist["title"] = playlist["title"].split('\n')[0].strip()
+                
             videos = playlist.get("videos", [])
             
             # Skip if not enough videos with details
@@ -1045,31 +1038,41 @@ def find_best_playlist(query, debug=False):
                 continue
                 
             # Step 3: Apply scoring criteria
-            score, details = score_playlist(playlist, query, debug)
-            
-            if score is not None:
-                scored_playlists.append({
-                    "playlist": playlist,
-                    "score": score,
-                    "details": details,
-                    "verdict": get_verdict(score)
-                })
+            try:
+                score, details = score_playlist(playlist, query, debug)
                 
-                if debug:
-                    print(f"✅ Final Score: {score:.1f}/10.0")
+                if score is not None:
+                    scored_playlists.append({
+                        "playlist": playlist,
+                        "score": score,
+                        "details": details,
+                        "verdict": get_verdict(score)
+                    })
                     
-                # If we find an exceptional playlist, stop searching
-                if score >= 8.0:
                     if debug:
-                        print(f"🔥 Found EXCEPTIONAL playlist! Stopping search.")
-                    break
+                        print(f"✅ Final Score: {score:.1f}/10.0")
+                        
+                    # If we find an exceptional playlist, stop searching
+                    if score >= 8.0:
+                        if debug:
+                            print(f"🔥 Found EXCEPTIONAL playlist! Stopping search.")
+                        break
+            except Exception as e:
+                if debug:
+                    print(f"Error scoring playlist: {e}")
+                    import traceback
+                    traceback.print_exc()
+                continue
         except Exception as e:
             if debug:
                 print(f"Error evaluating playlist {playlist_id}: {e}")
+                import traceback
+                traceback.print_exc()
             continue
     
     # Step 4: Sort playlists by score and return the best one
     if scored_playlists:
+        # Sort by score descending
         scored_playlists.sort(key=lambda x: x["score"], reverse=True)
         best = scored_playlists[0]
         
@@ -1090,6 +1093,8 @@ def find_best_playlist(query, debug=False):
             return best
         elif debug:
             print("\n⚠️ No playlists met the minimum score requirement of 6.0")
+    elif debug:
+        print("\n❌ No playlists could be properly evaluated.")
     
     return None
 
@@ -1154,20 +1159,18 @@ Return JSON with these fields:
             conn.request("POST", "/openai/v1/chat/completions", payload, headers)
             response = conn.getresponse()
             
-            if response.status == 429:  # Too Many Requests
+            # For any HTTP error, retry with a different API key
+            if response.status != 200:
+                print(f"Error from Groq API: {response.status} {response.reason}")
                 retry_count += 1
                 if retry_count < GROQ_MAX_RETRIES:
-                    print(f"Groq API rate limit reached. Rotating API key and retrying...")
+                    print(f"Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
                     current_key = get_next_groq_api_key()
-                    time.sleep(GROQ_RATE_LIMIT_DELAY)
+                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
                     continue
                 else:
                     print("Max retries reached for Groq API. Using fallback relevance checking.")
                     return None
-                
-            if response.status != 200:
-                print(f"Error from Groq API: {response.status} {response.reason}")
-                return None
                 
             # Parse response
             data = json.loads(response.read().decode())
@@ -1182,14 +1185,21 @@ Return JSON with these fields:
                 return (is_relevant, confidence, explanation)
             except (json.JSONDecodeError, KeyError, IndexError) as e:
                 print(f"Error parsing Groq response: {e}")
+                retry_count += 1
+                if retry_count < GROQ_MAX_RETRIES:
+                    print(f"Response parsing error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
+                    current_key = get_next_groq_api_key()
+                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)
+                    continue
                 return None
                 
         except Exception as e:
             print(f"Error calling Groq API: {e}")
-            if retry_count < GROQ_MAX_RETRIES - 1:
-                retry_count += 1
+            retry_count += 1
+            if retry_count < GROQ_MAX_RETRIES:
+                print(f"Network or other error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
                 current_key = get_next_groq_api_key()
-                time.sleep(GROQ_RATE_LIMIT_DELAY)
+                time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)
                 continue
             return None
             
@@ -1206,7 +1216,7 @@ def evaluate_playlist_with_groq(playlist, query):
     Returns:
         float: Score from 0-2 points
     """
-    if not USE_GROQ:
+    if not USE_GROQ or not GROQ_API_KEYS:
         print("Groq API key not set. Cannot evaluate playlist quality.")
         return 0
         
@@ -1217,6 +1227,10 @@ def evaluate_playlist_with_groq(playlist, query):
         try:
             # Get information for evaluation
             title = playlist.get("title", "")
+            # Handle multi-line titles
+            if '\n' in title:
+                title = title.split('\n')[0].strip()
+                
             video_count = len(playlist.get("videos", []))
             first_video_title = playlist.get("videos", [{}])[0].get("title", "") if playlist.get("videos") else ""
             video_titles = [v.get("title", "") for v in playlist.get("videos", [])[:5]]  # First 5 video titles
@@ -1266,20 +1280,21 @@ Return ONLY a JSON with:
             conn.request("POST", "/openai/v1/chat/completions", payload, headers)
             response = conn.getresponse()
             
-            if response.status == 429:  # Too Many Requests
+            # Handle HTTP errors - for any error code, retry with a different API key
+            if response.status != 200:
+                error_message = f"Error from Groq API: {response.status} {response.reason}"
+                print(error_message)
+                
+                # Retry with a different API key for any error
                 retry_count += 1
                 if retry_count < GROQ_MAX_RETRIES:
-                    print(f"Groq API rate limit reached. Rotating API key and retrying...")
+                    print(f"Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
                     current_key = get_next_groq_api_key()
-                    time.sleep(GROQ_RATE_LIMIT_DELAY)
+                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
                     continue
                 else:
                     print("Max retries reached for Groq API. Using fallback evaluation.")
-                    return 0
-                
-            if response.status != 200:
-                print(f"Error from Groq API: {response.status} {response.reason}")
-                return 0
+                    return 1.0  # Default to average score rather than 0
                 
             # Parse response
             data = json.loads(response.read().decode())
@@ -1288,7 +1303,7 @@ Return ONLY a JSON with:
                 content = data["choices"][0]["message"]["content"]
                 result = json.loads(content)
                 
-                score = float(result.get("score", 0))
+                score = float(result.get("score", 1.0))  # Default to 1.0 (average) if missing
                 explanation = result.get("explanation", "No explanation provided")
                 
                 print(f"Groq evaluation: {score}/2.0 - {explanation}")
@@ -1296,18 +1311,25 @@ Return ONLY a JSON with:
                 return min(2.0, max(0.0, score))  # Ensure score is within 0-2 range
             except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
                 print(f"Error parsing Groq evaluation response: {e}")
-                return 0
+                retry_count += 1
+                if retry_count < GROQ_MAX_RETRIES:
+                    print(f"Response parsing error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
+                    current_key = get_next_groq_api_key()
+                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
+                    continue
+                return 1.0  # Default to average score rather than 0
                 
         except Exception as e:
             print(f"Error during Groq playlist evaluation: {e}")
-            if retry_count < GROQ_MAX_RETRIES - 1:
-                retry_count += 1
+            retry_count += 1
+            if retry_count < GROQ_MAX_RETRIES:
+                print(f"Network or other error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
                 current_key = get_next_groq_api_key()
-                time.sleep(GROQ_RATE_LIMIT_DELAY)
+                time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
                 continue
-            return 0
+            return 1.0  # Default to average score rather than 0
             
-    return 0
+    return 1.0  # Default to average score rather than 0
 
 def score_playlist(playlist, query, debug=False):
     """
@@ -1337,7 +1359,23 @@ def score_playlist(playlist, query, debug=False):
         "total_duration_minutes": 0
     }
     
+    # Check for enhanced duration data from API wrapper
+    enhanced_duration = None
+    if '_avg_duration_minutes' in playlist:
+        enhanced_duration = playlist.get('_avg_duration_minutes')
+        if debug:
+            print(f"Using enhanced duration calculation: {enhanced_duration:.1f} min/video")
+        
+    # Check for enhanced total duration
+    if '_total_duration_minutes' in playlist:
+        details["total_duration_minutes"] = playlist.get('_total_duration_minutes')
+        if debug:
+            print(f"Using enhanced total duration: {details['total_duration_minutes']:.1f} minutes")
+            
     # 🧠 Must-Pass Filter: Title Relevance
+    title_relevance = False
+    relevance_explanation = ""
+    
     if USE_GROQ:
         if debug:
             print(f"Checking title relevance with Groq: '{title}'")
@@ -1352,9 +1390,49 @@ def score_playlist(playlist, query, debug=False):
             if debug:
                 print(f"Groq relevance check: {title_relevance} (confidence: {confidence:.2f})")
                 print(f"  Explanation: {explanation}")
+        else:
+            # If Groq failed after all retries, fall back to basic matching
+            if debug:
+                print(f"Groq check failed after retries. Falling back to basic relevance matching.")
+            
+            # Fall back to basic matching (same as in the else branch below)
+            query_terms = query.lower().split()
+            title_lower = title.lower()
+            
+            # Check for query terms in title (partial match)
+            matched_terms = [term for term in query_terms if term in title_lower]
+            
+            # Handle common abbreviations
+            abbrev_map = {
+                "js": "javascript",
+                "py": "python",
+                "ts": "typescript",
+                "react": "reactjs",
+                "vue": "vuejs",
+                "node": "nodejs",
+                "cpp": "c++"
+            }
+            
+            for abbrev, full in abbrev_map.items():
+                if abbrev in title_lower and full in query.lower():
+                    matched_terms.append(full)
+                elif full in title_lower and abbrev in query.lower():
+                    matched_terms.append(abbrev)
+            
+            # Video titles check (verify most videos are on topic)
+            relevant_videos = 0
+            for video in videos:
+                video_title = video.get("title", "").lower()
+                if any(term in video_title for term in query_terms):
+                    relevant_videos += 1
+            
+            relevance_percentage = (relevant_videos / len(videos)) * 100 if videos else 0
+            
+            title_relevance = len(matched_terms) > 0 and relevance_percentage >= 60
+            relevance_explanation = f"Matched {len(matched_terms)} terms, {relevance_percentage:.1f}% relevant videos"
     else:
-        if debug and USE_GROQ:
-            print("Falling back to basic relevance matching")
+        if debug:
+            print("Using basic relevance matching (Groq API not available)")
         
         query_terms = query.lower().split()
         title_lower = title.lower()
@@ -1453,24 +1531,71 @@ def score_playlist(playlist, query, debug=False):
     # ⏱ Total Duration vs Count (1.0 to 2.0 points)
     videos_with_duration = [v for v in videos if "duration_seconds" in v and v["duration_seconds"]]
     
-    if videos_with_duration:
-        total_duration_minutes = sum(v["duration_seconds"] for v in videos_with_duration) / 60
-        details["total_duration_minutes"] = total_duration_minutes
+    if enhanced_duration is not None:
+        # Use our enhanced duration calculation
+        duration_per_video = enhanced_duration
         
-        duration_per_video = total_duration_minutes / len(videos_with_duration) if videos_with_duration else 0
+        if '_total_duration_minutes' in playlist:
+            details["total_duration_minutes"] = playlist.get('_total_duration_minutes')
+        elif videos_with_duration:
+            # Still calculate total if not provided
+            total_duration_minutes = sum(v["duration_seconds"] for v in videos_with_duration) / 60
+            details["total_duration_minutes"] = total_duration_minutes
         
-        if duration_per_video >= 45:
+        # Calculate thresholds for scoring
+        threshold_high = len(videos) * 45    # 45 min per video threshold for highest score
+        threshold_medium = len(videos) * 30  # 30 min per video threshold for medium score
+        threshold_low = len(videos) * 15     # 15 min per video threshold for minimum score
+        
+        total_duration_minutes = details["total_duration_minutes"]
+        
+        # Determine which threshold the total duration meets
+        if total_duration_minutes >= threshold_high:
             duration_ratio_score = 2.0
-        elif duration_per_video >= 30:
+            threshold_desc = f"{total_duration_minutes:.1f} minutes ≥ {len(videos)} videos × 45 min ({threshold_high} min)"
+        elif total_duration_minutes >= threshold_medium:
             duration_ratio_score = 1.5
-        else:  # At least 15 min/video
+            threshold_desc = f"{total_duration_minutes:.1f} minutes ≥ {len(videos)} videos × 30 min ({threshold_medium} min)"
+        elif total_duration_minutes >= threshold_low:
             duration_ratio_score = 1.0
-            
+            threshold_desc = f"{total_duration_minutes:.1f} minutes ≥ {len(videos)} videos × 15 min ({threshold_low} min)"
+        else:
+            duration_ratio_score = 0.0
+            threshold_desc = f"{total_duration_minutes:.1f} minutes < {len(videos)} videos × 15 min ({threshold_low} min)"
+        
         details["duration_ratio_score"] = duration_ratio_score
         total_score += duration_ratio_score
         
         if debug:
-            print(f"+ Duration/video ratio ({duration_per_video:.1f} min/video): +{duration_ratio_score:.1f} points")
+            print(f"+ Duration/video ratio: +{duration_ratio_score:.1f} points ({threshold_desc})")
+    elif videos_with_duration:
+        total_duration_minutes = sum(v["duration_seconds"] for v in videos_with_duration) / 60
+        details["total_duration_minutes"] = total_duration_minutes
+        
+        # Calculate thresholds for scoring
+        threshold_high = len(videos) * 45    # 45 min per video threshold for highest score
+        threshold_medium = len(videos) * 30  # 30 min per video threshold for medium score
+        threshold_low = len(videos) * 15     # 15 min per video threshold for minimum score
+        
+        # Determine which threshold the total duration meets
+        if total_duration_minutes >= threshold_high:
+            duration_ratio_score = 2.0
+            threshold_desc = f"{total_duration_minutes:.1f} minutes ≥ {len(videos)} videos × 45 min ({threshold_high} min)"
+        elif total_duration_minutes >= threshold_medium:
+            duration_ratio_score = 1.5
+            threshold_desc = f"{total_duration_minutes:.1f} minutes ≥ {len(videos)} videos × 30 min ({threshold_medium} min)"
+        elif total_duration_minutes >= threshold_low:
+            duration_ratio_score = 1.0
+            threshold_desc = f"{total_duration_minutes:.1f} minutes ≥ {len(videos)} videos × 15 min ({threshold_low} min)"
+        else:
+            duration_ratio_score = 0.0
+            threshold_desc = f"{total_duration_minutes:.1f} minutes < {len(videos)} videos × 15 min ({threshold_low} min)"
+        
+        details["duration_ratio_score"] = duration_ratio_score
+        total_score += duration_ratio_score
+        
+        if debug:
+            print(f"+ Duration/video ratio: +{duration_ratio_score:.1f} points ({threshold_desc})")
     else:
         details["duration_ratio_score"] = 0
         if debug:
@@ -1479,44 +1604,108 @@ def score_playlist(playlist, query, debug=False):
     # 📅 First Video Publish Year (0.5 to 1.5 points)
     current_year = datetime.now().year
     recency_score = 0
+    publish_year = None
     
-    if videos and "publish_date" in videos[0]:
-        publish_date = videos[0].get("publish_date", "")
-        year = None
-        
-        # Extract year from publish_date (format varies)
-        if publish_date.isdigit() and len(publish_date) == 8:  # yyyymmdd format from yt-dlp
-            year = int(publish_date[:4])
-        elif len(publish_date) >= 4 and publish_date[:4].isdigit():
-            year = int(publish_date[:4])
-        elif "year" in publish_date.lower():
-            # Extract year from strings like "1 year ago"
-            try:
-                years_ago = int(re.search(r'(\d+) year', publish_date).group(1))
-                year = current_year - years_ago
-            except:
-                pass
-        
-        if year == 2024:  # Specifically 2024
-            recency_score = 1.5
-        elif year == 2023:  # 2023
-            recency_score = 1.0
-        else:  # Before 2023
-            recency_score = 0.5
+    # Check for enhanced publish date from API wrapper
+    if '_publish_year' in playlist:
+        publish_year = playlist.get('_publish_year')
+        if debug:
+            print(f"Using enhanced publish year: {publish_year}")
             
-        details["recency_score"] = recency_score
-        total_score += recency_score
+    # Try to get the publish date from the first video
+    elif videos:
+        first_video = videos[0]
+        publish_date = None
+        publish_date_formatted = None
         
+        # First, check if we already have a formatted publish date
+        if "publish_date_formatted" in first_video:
+            publish_date_formatted = first_video.get("publish_date_formatted")
+            if debug:
+                print(f"Found formatted publish date: {publish_date_formatted}")
+        
+        # Check for regular publish date
+        if "publish_date" in first_video:
+            publish_date = first_video.get("publish_date", "")
+            if debug:
+                print(f"Found publish date: {publish_date}")
+            
+            # Extract year from publish date - try multiple formats
+            if publish_date:
+                # Try to parse a formatted date (YYYY-MM-DD)
+                if "-" in publish_date and len(publish_date) >= 4:
+                    year_str = publish_date.split("-")[0]
+                    if year_str.isdigit():
+                        publish_year = int(year_str)
+                # Try YYYYMMDD format
+                elif publish_date.isdigit() and len(publish_date) == 8:
+                    publish_year = int(publish_date[:4])
+                # Try just a year
+                elif publish_date.isdigit() and len(publish_date) == 4:
+                    publish_year = int(publish_date)
+                # Try to extract from "N years ago"
+                elif "year" in publish_date.lower():
+                    try:
+                        years_ago = int(re.search(r'(\d+) year', publish_date).group(1))
+                        publish_year = current_year - years_ago
+                    except:
+                        pass
+                # Try to infer current year from recent content
+                elif any(term in publish_date.lower() for term in ["month", "week", "day", "hour", "minute", "second"]):
+                    publish_year = current_year
+                
+                if debug and publish_year:
+                    print(f"Extracted year from publish date: {publish_year}")
+        
+        # If we still don't have a year, try fetching the video details specifically
+        if not publish_year and "id" in first_video:
+            try:
+                if debug:
+                    print(f"Fetching detailed info for first video to get publish date...")
+                video_id = first_video.get("id")
+                detailed_video = get_video_details(video_id)
+                
+                if "publish_date_formatted" in detailed_video:
+                    formatted_date = detailed_video.get("publish_date_formatted")
+                    if formatted_date and "-" in formatted_date:
+                        year_str = formatted_date.split("-")[0]
+                        if year_str.isdigit():
+                            publish_year = int(year_str)
+                            if debug:
+                                print(f"Got year from formatted date: {publish_year}")
+                
+                if not publish_year and "publish_date" in detailed_video:
+                    raw_date = detailed_video.get("publish_date")
+                    if raw_date and raw_date.isdigit() and len(raw_date) == 8:
+                        publish_year = int(raw_date[:4])
+                        if debug:
+                            print(f"Got year from raw date: {publish_year}")
+            except Exception as e:
+                if debug:
+                    print(f"Error fetching publish date for first video: {e}")
+    
+    # Calculate recency score based on the year
+    if publish_year:
+        if publish_year >= 2024:  # Current year (2024)
+            recency_score = 1.5
+            if debug:
+                print(f"+ First video publish year ({publish_year} - current year): +{recency_score:.1f} points")
+        elif publish_year >= 2023:  # Last year (2023)
+            recency_score = 1.0
+            if debug:
+                print(f"+ First video publish year ({publish_year} - last year): +{recency_score:.1f} points")
+        else:  # Older content
+            recency_score = 0.5
+            if debug:
+                print(f"+ First video publish year ({publish_year} - older): +{recency_score:.1f} points")
+    else:  # No year detected
+        recency_score = 0.5  # Default to oldest category
         if debug:
-            if year:
-                print(f"+ First video publish year ({year}): +{recency_score:.1f} points")
-            else:
-                print(f"+ First video recency (unknown year): +{recency_score:.1f} points")
-    else:
-        details["recency_score"] = 0.5  # Default to oldest category
-        total_score += 0.5
-        if debug:
-            print(f"+ First video recency (no data): +0.5 points (default)")
+            print(f"+ First video recency (no year detected): +0.5 points (default)")
+    
+    details["recency_score"] = recency_score
+    details["publish_year"] = publish_year  # Store the year for reference
+    total_score += recency_score
     
     # ❤️ Like Ratio of First Video (0 to 0.5 points)
     like_ratio_score = 0
