@@ -1339,33 +1339,33 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
               
               // Create promises for each video in the current batch
               const batchPromises = currentBatch.map(async (video) => {
-                try {
-                  // Skip if it's a fallback video
-                  if (video.fallback) return video;
-                  
-                  // Fetch video details including duration
+              try {
+                // Skip if it's a fallback video
+                if (video.fallback) return video;
+
+                // Fetch video details including duration
                   console.log(`Fetching details for: ${video.title}`);
-                  const details = await getVideoDetails(video.url);
+                const details = await getVideoDetails(video.url);
                   
-                  if (details) {
-                    // Merge the details with the video object
-                    return {
-                      ...video,
-                      duration: details.duration,
-                      duration_seconds: details.duration_seconds,
-                      views: details.views,
-                      likes: details.likes,
-                      channel: details.channel,
-                      publish_date: details.publish_date
-                    };
-                  }
-                  return video;
-                } catch (error) {
-                  console.error(`Error fetching details for video ${video.url}:`, error);
-                  return video;
+                if (details) {
+                  // Merge the details with the video object
+                  return {
+                    ...video,
+                    duration: details.duration,
+                    duration_seconds: details.duration_seconds,
+                    views: details.views,
+                    likes: details.likes,
+                    channel: details.channel,
+                    publish_date: details.publish_date
+                  };
                 }
-              });
-              
+                return video;
+              } catch (error) {
+                console.error(`Error fetching details for video ${video.url}:`, error);
+                return video;
+              }
+            });
+
               // Wait for all videos in this batch to complete
               const batchResults = await Promise.all(batchPromises);
               processedVideos.push(...batchResults);
@@ -1377,7 +1377,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
             }
             
             console.log(`Finished fetching details for ${processedVideos.length} videos`);
-            
+
             // Rate the videos with complete information
             const ratingPromises = processedVideos.map(async (video) => {
               // Add topic relevance term for title matching

@@ -442,7 +442,7 @@ class CustomPlaylist:
     
     def getNextVideos(self, batch_size=None):
         """Method to match youtube-search-python API with batch size support"""
-        return self.get_next_videos(batch_size)
+        return self.get_next_videos(batch_size) 
 
     async def _fetch_remaining_videos_with_api(self, start_index: int, total_videos: int) -> None:
         """Fetch remaining videos from a playlist using YouTube's internal API"""

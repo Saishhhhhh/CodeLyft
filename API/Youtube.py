@@ -309,8 +309,38 @@ def get_video_details(video_id_or_url):
         desc_match = re.search(r'"shortDescription":"([^"]+)"', html)
         description = desc_match.group(1).replace('\\n', '\n').replace('\\', '') if desc_match else ""
         
-        date_match = re.search(r'"publishDate":"([^"]+)"', html)
-        publish_date = date_match.group(1) if date_match else None
+        # Try multiple patterns to extract publish date
+        publish_date = None
+        publish_date_formatted = None
+        date_patterns = [
+            r'"publishDate":"([^"]+)"',
+            r'"uploadDate":"([^"]+)"', 
+            r'{"text":"Premiered ([^"]+)"}',
+            r'{"text":"([A-Z][a-z]+ \d+, \d{4})"}',
+            r'itemprop="datePublished" content="([^"]+)"',
+            r'"dateText":\{"simpleText":"([^"]+)"',
+            r'"publishDate":"(.+?)"'
+        ]
+        
+        for pattern in date_patterns:
+            date_match = re.search(pattern, html)
+            if date_match:
+                publish_date = date_match.group(1)
+                break
+        
+        # If we found a date, try to standardize its format
+        if publish_date:
+            # If it's already in ISO format (YYYY-MM-DD), keep it as formatted date
+            if re.match(r'\d{4}-\d{2}-\d{2}', publish_date):
+                publish_date_formatted = publish_date
+            # Handle "Month Day, Year" format
+            elif re.match(r'[A-Z][a-z]+ \d+, \d{4}', publish_date):
+                try:
+                    from datetime import datetime
+                    dt = datetime.strptime(publish_date, '%B %d, %Y')
+                    publish_date_formatted = dt.strftime('%Y-%m-%d')
+                except Exception as e:
+                    print(f"Error converting date format: {e}")
         
         duration_match = re.search(r'"lengthSeconds":"(\d+)"', html)
         duration = int(duration_match.group(1)) if duration_match else None
@@ -331,6 +361,7 @@ def get_video_details(video_id_or_url):
             "likes": likes,
             "likes_formatted": format_number(likes),
             "publish_date": publish_date,
+            "publish_date_formatted": publish_date_formatted,
             "duration": duration,
             "duration_string": duration_string,
             "url": url,
@@ -399,16 +430,16 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                 traceback.print_exc()
                 
                 # If we failed to fetch videos with the async method, try the regular method
-                if not playlist.videos:
-                    print("No videos found in playlist")
-                    return {
-                        "id": playlist_id,
-                        "title": playlist.info.get('title', 'Unknown Playlist'),
-                        "url": playlist_url,
-                        "videos": [],
-                        "video_count": 0,
-                        "source": "custom_playlist"
-                    }
+            if not playlist.videos:
+                print("No videos found in playlist")
+                return {
+                    "id": playlist_id,
+                    "title": playlist.info.get('title', 'Unknown Playlist'),
+                    "url": playlist_url,
+                    "videos": [],
+                    "video_count": 0,
+                    "source": "custom_playlist"
+                }
             
             # If we have a limit, respect it
             if limit > 0 and len(playlist.videos) > limit:
@@ -984,7 +1015,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
             print("Empty query provided. Cannot search for playlists.")
         return None
         
-    # Step 1: Get multiple playlists related to the query
+        # Step 1: Get multiple playlists related to the query
     try:
         search_results = search_playlists(query, limit=12)
         playlists = search_results.get("results", [])
@@ -1069,7 +1100,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                         print(f"❌ Skipping: Groq determined this playlist is not relevant to '{query}'")
                         print(f"   Reason: {explanation}")
                     return None
-            
+                
             # Step 3: Apply scoring criteria
             try:
                 score, details = score_playlist(playlist, query, debug)
@@ -1088,15 +1119,15 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                     
                     if debug:
                         print(f"✅ Final Score: {score:.1f}/10.0")
-                        
+                    
                     # If we find an exceptional playlist, mark it so other threads can stop
                     if score >= 8.0:
                         if debug:
                             print(f"🔥 Found EXCEPTIONAL playlist! Notifying other threads.")
                         with exceptional_found_lock:
                             exceptional_found = True
-                    
-                    return result
+                        
+                        return result
             except Exception as e:
                 if debug:
                     print(f"Error scoring playlist: {e}")
@@ -1253,7 +1284,7 @@ Return JSON with these fields:
                     continue
                 else:
                     print("Max retries reached for Groq API. Using fallback relevance checking.")
-                    return None
+                return None
                 
             # Parse response
             data = json.loads(response.read().decode())
@@ -1462,7 +1493,7 @@ def score_playlist(playlist, query, debug=False):
         details["total_duration_minutes"] = playlist.get('_total_duration_minutes')
         if debug:
             print(f"Using enhanced total duration: {details['total_duration_minutes']:.1f} minutes")
-            
+    
     # 🧠 Must-Pass Filter: Title Relevance
     title_relevance = False
     relevance_explanation = ""
@@ -1653,7 +1684,7 @@ def score_playlist(playlist, query, debug=False):
         else:
             duration_ratio_score = 0.0
             threshold_desc = f"{total_duration_minutes:.1f} minutes < {len(videos)} videos × 15 min ({threshold_low} min)"
-        
+            
         details["duration_ratio_score"] = duration_ratio_score
         total_score += duration_ratio_score
         
@@ -1720,7 +1751,7 @@ def score_playlist(playlist, query, debug=False):
             publish_date = first_video.get("publish_date", "")
             if debug:
                 print(f"Found publish date: {publish_date}")
-            
+        
             # Extract year from publish date - try multiple formats
             if publish_date:
                 # Try to parse a formatted date (YYYY-MM-DD)
@@ -1745,8 +1776,8 @@ def score_playlist(playlist, query, debug=False):
                 elif any(term in publish_date.lower() for term in ["month", "week", "day", "hour", "minute", "second"]):
                     publish_year = current_year
                 
-                if debug and publish_year:
-                    print(f"Extracted year from publish date: {publish_year}")
+        if debug and publish_year:
+            print(f"Extracted year from publish date: {publish_year}")
         
         # If we still don't have a year, try fetching the video details specifically
         if not publish_year and "id" in first_video:
@@ -1805,9 +1836,9 @@ def score_playlist(playlist, query, debug=False):
         first_video = videos[0]
         like_ratio = (first_video["likes"] / first_video["views"]) * 100
         
-        if like_ratio >= 4:
+        if like_ratio >= 2:
             like_ratio_score = 0.5
-        elif like_ratio >= 2:
+        elif like_ratio >= 1:
             like_ratio_score = 0.25
         
         details["like_ratio_score"] = like_ratio_score

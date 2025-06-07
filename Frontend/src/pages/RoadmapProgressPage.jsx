@@ -397,23 +397,23 @@ const RoadmapProgressPage = () => {
                         }
                         
                         return (
-                          <TopicSection
-                            key={topicIndex}
-                            topic={topic}
-                            completedVideos={completedVideos}
-                            videoNotes={videoNotes}
-                            onToggleVideoComplete={toggleVideoCompletion}
-                            onPlayVideo={openVideoModal}
-                            onAddNote={openNoteModal}
-                            onPlaylistClick={handlePlaylistClick}
-                          />
+                        <TopicSection
+                          key={topicIndex}
+                          topic={topic}
+                          completedVideos={completedVideos}
+                          videoNotes={videoNotes}
+                          onToggleVideoComplete={toggleVideoCompletion}
+                          onPlayVideo={openVideoModal}
+                          onAddNote={openNoteModal}
+                          onPlaylistClick={handlePlaylistClick}
+                        />
                         );
                       })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
           </div>
 
           {/* Action Buttons */}
