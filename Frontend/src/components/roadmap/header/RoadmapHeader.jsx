@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FaYoutube, FaFlag, FaMountain } from 'react-icons/fa';
+import { FaFlag, FaMountain } from 'react-icons/fa';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -25,7 +25,7 @@ const itemVariants = {
   }
 };
 
-const RoadmapHeader = ({ title, description, onStartJourney, isLoading }) => {
+const RoadmapHeader = ({ title, description }) => {
   return (
     <motion.div 
       initial="hidden"
@@ -66,44 +66,6 @@ const RoadmapHeader = ({ title, description, onStartJourney, isLoading }) => {
         >
           {description}
         </motion.p>
-          
-        {/* Hero Buttons */}
-        <div className="flex flex-wrap justify-center gap-6 mb-16">
-          <motion.button
-            whileHover={{ 
-              scale: 1.05, 
-              boxShadow: "0 0 30px rgba(99,102,241,0.25)",
-              transition: { duration: 0.2 }
-            }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onStartJourney}
-            disabled={isLoading}
-            className="group relative px-10 py-5 rounded-xl font-semibold text-lg text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden shadow-lg hover:shadow-xl"
-          >
-            <motion.div 
-              className="absolute inset-0 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-              whileHover={{ scale: 1.1 }}
-              transition={{ duration: 0.3 }}
-            />
-            <span className="relative flex items-center">
-              {isLoading ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-6 h-6 border-2 border-white border-t-transparent rounded-full mr-3"
-                  />
-                  Finding Learning Resources...
-                </>
-              ) : (
-                <>
-                  <FaYoutube className="mr-3 text-2xl" />
-                  Start Your Learning Journey
-                </>
-              )}
-            </span>
-          </motion.button>
-        </div>
 
         {/* Journey Path Visualization */}
         <motion.div 

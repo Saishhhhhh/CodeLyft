@@ -11,48 +11,62 @@ export const formatDuration = (duration) => {
   // Handle null or undefined
   if (!duration) return '0:00';
 
-  // If duration is already a string in HH:MM:SS or MM:SS format
-  if (typeof duration === 'string') {
-    // Remove any non-numeric characters except colons
-    const cleanDuration = duration.replace(/[^0-9:]/g, '');
-    
-    // Handle MM:SS format
-    if (cleanDuration.match(/^\d+:\d{2}$/)) {
-      const [minutes, seconds] = cleanDuration.split(':').map(Number);
-      if (minutes >= 60) {
-        // Convert to HH:MM:SS if minutes >= 60
-        const hours = Math.floor(minutes / 60);
-        const remainingMinutes = minutes % 60;
-        return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  try {
+    // If duration is a string
+    if (typeof duration === 'string') {
+      // If it's a string with colons (time format)
+      if (duration.includes(':')) {
+        const parts = duration.split(':').map(part => parseInt(part) || 0);
+        
+        // Handle HH:MM:SS format
+        if (parts.length === 3) {
+          return `${parts[0]}:${parts[1].toString().padStart(2, '0')}:${parts[2].toString().padStart(2, '0')}`;
+        }
+        
+        // Handle MM:SS format
+        else if (parts.length === 2) {
+          const minutes = parts[0];
+          const seconds = parts[1];
+          
+          // Convert to HH:MM:SS if minutes >= 60
+          if (minutes >= 60) {
+            const hours = Math.floor(minutes / 60);
+            const remainingMinutes = minutes % 60;
+            return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+          }
+          
+          return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
       }
-      return cleanDuration;
+      
+      // If it's a numeric string (seconds)
+      if (!isNaN(duration)) {
+        return formatDuration(parseInt(duration));
+      }
     }
     
-    // Handle HH:MM:SS format
-    if (cleanDuration.match(/^\d+:\d{2}:\d{2}$/)) {
-      const [hours, minutes, seconds] = cleanDuration.split(':').map(Number);
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // If duration is a number (seconds)
+    if (typeof duration === 'number') {
+      // Handle very large durations (over 24 hours)
+      if (duration > 86400) {
+        const days = Math.floor(duration / 86400);
+        return `${days}+ days`;
+      }
+      
+      const hours = Math.floor(duration / 3600);
+      const minutes = Math.floor((duration % 3600) / 60);
+      const seconds = Math.floor(duration % 60);
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+      
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
-
-    // Handle duration in seconds (numeric string)
-    if (!isNaN(duration)) {
-      const totalSeconds = parseInt(duration);
-      return formatDuration(totalSeconds);
-    }
+  } catch (error) {
+    console.error('Error formatting duration:', error, duration);
   }
-
-  // If duration is a number (in seconds)
-  if (typeof duration === 'number') {
-    const hours = Math.floor(duration / 3600);
-    const minutes = Math.floor((duration % 3600) / 60);
-    const seconds = Math.floor(duration % 60);
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-
+  
   // Fallback for invalid duration
   return '0:00';
 };
@@ -112,13 +126,31 @@ export const decodeUnicode = (text) => {
 export const getChannelName = (video) => {
   if (!video) return 'Unknown Channel';
   
+  // Case 1: channel is a string
   if (typeof video.channel === 'string') {
     return video.channel;
   }
   
-  return video.channel?.name || 
-         video.videos?.[0]?.channel?.name || 
-         'Unknown Channel';
+  // Case 2: channel is an object with name property
+  if (video.channel && typeof video.channel === 'object' && video.channel.name) {
+    return video.channel.name;
+  }
+  
+  // Case 3: try to get channel from the first video in playlist
+  if (video.videos && video.videos.length > 0) {
+    const firstVideo = video.videos[0];
+    
+    if (typeof firstVideo.channel === 'string') {
+      return firstVideo.channel;
+    }
+    
+    if (firstVideo.channel && typeof firstVideo.channel === 'object' && firstVideo.channel.name) {
+      return firstVideo.channel.name;
+    }
+  }
+  
+  // Fallback to Unknown
+  return 'Unknown Channel';
 };
 
 /**

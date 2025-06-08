@@ -211,6 +211,12 @@ exports.logout = (req, res) => {
     expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true
   });
+  
+  // Clear JWT cookie with jwt name
+  res.cookie('jwt', 'none', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true
+  });
 
   // Clear passport session if it exists
   if (req.logout) {
@@ -257,8 +263,9 @@ exports.googleCallback = (req, res) => {
       cookieOptions.secure = true;
     }
 
-    // Set the token in a cookie
+    // Set the token in cookies
     res.cookie('token', token, cookieOptions);
+    res.cookie('jwt', token, cookieOptions);
 
     // Redirect to frontend with token in URL for client-side storage
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -300,8 +307,9 @@ exports.githubCallback = (req, res) => {
       cookieOptions.secure = true;
     }
 
-    // Set the token in a cookie
+    // Set the token in cookies
     res.cookie('token', token, cookieOptions);
+    res.cookie('jwt', token, cookieOptions);
 
     // Redirect to frontend with token in URL for client-side storage
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -341,6 +349,7 @@ const sendTokenResponse = (user, statusCode, res) => {
   res
     .status(statusCode)
     .cookie('token', token, cookieOptions)
+    .cookie('jwt', token, cookieOptions)
     .json({
       success: true,
       token,

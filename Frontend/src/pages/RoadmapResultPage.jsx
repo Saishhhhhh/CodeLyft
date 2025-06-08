@@ -1,25 +1,40 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import HeroAnimation from '../components/HeroAnimation';
 import { generateLearningRoadmap } from '../services/groqService';
 import { findBestVideoForTopic } from '../services/youtubeService';
+import { saveGeneratedRoadmap, checkAuth, getRoadmap, downloadRoadmap } from '../services/roadmapService';
+import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import RoadmapLoadingState from '../components/roadmap/loading/RoadmapLoadingState';
 import RoadmapErrorState from '../components/roadmap/error/RoadmapErrorState';
 import RoadmapHeader from '../components/roadmap/header/RoadmapHeader';
-import LearningPath from '../components/roadmap/path/LearningPath';
-import AdvancedChallenges from '../components/roadmap/challenges/AdvancedChallenges';
-import PracticeProjects from '../components/roadmap/projects/PracticeProjects';
+import LearningPath from '../components/roadmap/sections/LearningPath';
+import AdvancedChallenges from '../components/roadmap/sections/AdvancedChallenges';
+import PracticeProjects from '../components/roadmap/sections/PracticeProjects';
 import RoadmapFooter from '../components/roadmap/footer/RoadmapFooter';
+import { toast } from 'react-hot-toast';
+import Navbar from '../components/Navbar';
+import { FaFileExport } from 'react-icons/fa';
+import ResourceLoadingModal from '../components/roadmap/modals/ResourceLoadingModal';
 
-const RoadmapResultPage = () => {
+const RoadmapResultPage = ({ fromSaved = false }) => {
   const [roadmap, setRoadmap] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadingVideos, setLoadingVideos] = useState(false);
+  const [currentTopic, setCurrentTopic] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [foundResources, setFoundResources] = useState([]);
+  const [showResourceLoadingModal, setShowResourceLoadingModal] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [savedToDB, setSavedToDB] = useState(false);
+  const [savingToDB, setSavingToDB] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const MAX_RETRIES = 5;
   const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
+  const { id } = useParams(); // Get roadmap ID from URL for fromSaved mode
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -55,33 +70,222 @@ const RoadmapResultPage = () => {
     }
   };
 
-  useEffect(() => {
-    const generateRoadmap = async () => {
-      try {
-        const storedData = localStorage.getItem('roadmapData');
-        if (!storedData) {
-          navigate('/');
-          return;
-        }
-
-        const data = JSON.parse(storedData);
-        console.log('Roadmap data from localStorage:', data);
-        
-        const result = await generateRoadmapWithRetry(data);
-        console.log('Generated roadmap result:', result);
-          setRoadmap(result);
-        setError(null);
-      } catch (error) {
-        console.error('Failed to generate roadmap after all retries:', error);
-        setError('We were unable to generate a roadmap after several attempts. Please try again later.');
-        localStorage.removeItem('roadmapData');
-      } finally {
-        setLoading(false);
+  // Function to save roadmap to database
+  const saveRoadmapToDatabase = async (roadmapData) => {
+    // Prevent duplicate saves
+    if (savedToDB) {
+      console.log('Roadmap already saved to database, ignoring duplicate save request');
+      // No toast needed as this is automatic
+      return true;
+    }
+    
+    if (savingToDB) {
+      console.log('Currently saving roadmap, ignoring duplicate save request');
+      return true;
+    }
+    
+    try {
+      setSavingToDB(true);
+      
+      // Double-check authentication status
+      const authStatus = await checkAuth();
+      
+      if (!authStatus.isAuthenticated) {
+        console.warn('Auth check failed: User not authenticated, cannot save roadmap');
+        toast.error('Please log in to save your roadmap to your account');
+        // Save to JSON file as fallback
+        saveRoadmapToJson(roadmapData);
+        setSavingToDB(false);
+        return false;
       }
-    };
 
-    generateRoadmap();
-  }, [navigate]);
+      console.log('Auth check passed, user authenticated:', authStatus.isAuthenticated);
+      console.log('User ID:', authStatus.user?._id);
+      
+      // Try to save
+      try {
+        const savedRoadmap = await saveGeneratedRoadmap(roadmapData);
+        console.log('Roadmap saved to database:', savedRoadmap);
+        
+        // Handle the case where our service detected and prevented a duplicate save
+        if (savedRoadmap?.data?.duplicate) {
+          console.log('Duplicate save was prevented by the service');
+          // No toast needed for duplicates in automatic mode
+        } else {
+          toast.success('Roadmap saved to your account');
+        }
+        
+        setSavedToDB(true);
+        setSavingToDB(false);
+        return true;
+      } catch (innerError) {
+        console.error('Inner error saving roadmap:', innerError);
+        
+        // More specific error handling
+        if (innerError.response?.status === 401) {
+          toast.error('Authentication expired. Please log in again.');
+        } else if (innerError.response?.status === 403) {
+          toast.error('Permission denied. You cannot save this roadmap.');
+        } else if (innerError.response?.status >= 500) {
+          toast.error('Server error. Your roadmap is saved locally instead.');
+        } else {
+          toast.error('Failed to save to database. Roadmap saved locally as a backup.');
+        }
+        
+        // Save to JSON file as fallback
+        saveRoadmapToJson(roadmapData);
+        setSavingToDB(false);
+        return false;
+      }
+    } catch (saveError) {
+      console.error('Error saving roadmap to database:', saveError);
+      console.error('Error response:', saveError.response?.data);
+      
+      // More specific error handling
+      if (saveError.response?.status === 401) {
+        toast.error('Authentication error. Please log in again.');
+      } else if (saveError.response?.status === 403) {
+        toast.error('You do not have permission to save this roadmap.');
+      } else {
+        toast.error('Unable to save roadmap to your account. Saving to a file instead.');
+        // Save to JSON file as fallback
+        saveRoadmapToJson(roadmapData);
+      }
+      
+      setSavingToDB(false);
+      return false;
+    }
+  };
+  
+  // Save roadmap to JSON file as a fallback
+  const saveRoadmapToJson = (roadmapData) => {
+    try {
+      const jsonData = JSON.stringify(roadmapData, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `roadmap_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Roadmap saved to a file on your computer');
+      console.log('Roadmap saved to JSON file');
+    } catch (error) {
+      console.error('Error saving roadmap to JSON file:', error);
+      toast.error('Failed to save roadmap to file');
+    }
+  };
+
+  // Check if the roadmap has resources
+  const hasResources = useMemo(() => {
+    if (!roadmap || !roadmap.sections) return false;
+    
+    return roadmap.sections.some(section => {
+      return section.topics?.some(topic => 
+        topic.video?.videos && topic.video.videos.length > 0
+      );
+    });
+  }, [roadmap]);
+
+  useEffect(() => {
+    if (fromSaved) {
+      // Loading an existing roadmap from the database
+      const fetchSavedRoadmap = async () => {
+        try {
+          setLoading(true);
+          // Redirect if not authenticated
+          if (!isAuthenticated) {
+            navigate('/login');
+            return;
+          }
+          
+          if (!id) {
+            setError('Roadmap ID is missing');
+            setLoading(false);
+            return;
+          }
+          
+          const response = await getRoadmap(id);
+          const roadmapData = response.data;
+          
+          // Format the data to match the expected structure for RoadmapResultPage
+          const formattedRoadmap = {
+            title: roadmapData.title,
+            description: roadmapData.description,
+            sections: roadmapData.topics.map(topic => ({
+              title: topic.title,
+              description: topic.description,
+              difficulty: topic.difficulty || (roadmapData.difficulty === 'Beginner' ? 'beginner' : 
+                          roadmapData.difficulty === 'Advanced' ? 'advanced' : 'intermediate'),
+              topics: [{ 
+                title: topic.title, 
+                description: topic.description
+              }]
+            })),
+            advancedTopics: roadmapData.advancedTopics || [],
+            projects: roadmapData.projects || []
+          };
+          
+          setRoadmap(formattedRoadmap);
+          setSavedToDB(true); // This roadmap is already saved
+          setLoading(false);
+        } catch (error) {
+          console.error('Error fetching saved roadmap:', error);
+          setError('Failed to load the roadmap. Please try again.');
+          setLoading(false);
+        }
+      };
+      
+      fetchSavedRoadmap();
+    } else {
+      // Normal flow - generate roadmap from localStorage data
+      const generateRoadmap = async () => {
+        try {
+          setLoading(true);
+          const storedData = localStorage.getItem('roadmapData');
+          if (!storedData) {
+            navigate('/');
+            return;
+          }
+
+          const data = JSON.parse(storedData);
+          console.log('Roadmap data from localStorage:', data);
+          
+          const result = await generateRoadmapWithRetry(data);
+          console.log('Generated roadmap result:', result);
+          
+          // Set the roadmap state
+          setRoadmap(result);
+          setError(null);
+          setLoading(false);
+          
+          // Check if the roadmap has resources after setting it
+          const hasResourcesInResult = result.sections?.some(section => 
+            section.topics?.some(topic => 
+              topic.video?.videos && topic.video.videos.length > 0
+            )
+          );
+          
+          // Automatically save the roadmap if it has resources and the user is authenticated
+          if (hasResourcesInResult && isAuthenticated && !savedToDB && !savingToDB) {
+            setTimeout(() => {
+              saveRoadmapToDatabase(result);
+            }, 1000);
+          }
+        } catch (error) {
+          console.error('Failed to generate roadmap after all retries:', error);
+          setError('We were unable to generate a roadmap after several attempts. Please try again later.');
+          localStorage.removeItem('roadmapData');
+          setLoading(false);
+        }
+      };
+      
+      generateRoadmap();
+    }
+  }, [fromSaved, id, isAuthenticated, navigate]);
 
   const saveResourcesToJson = async (roadmapData) => {
     try {
@@ -174,8 +378,23 @@ const RoadmapResultPage = () => {
     try {
       setLoadingVideos(true);
       setError(null);
+      setShowResourceLoadingModal(true);
+      setFoundResources([]);
+      setProgressPercent(0);
 
       const updatedRoadmap = { ...roadmap };
+      
+      // Calculate total topics for progress tracking
+      let totalTopics = 0;
+      let processedTopics = 0;
+      
+      updatedRoadmap.sections.forEach(section => {
+        section.topics.forEach(topic => {
+          if (!topic.video) {
+            totalTopics++;
+          }
+        });
+      });
       
       for (let i = 0; i < updatedRoadmap.sections.length; i++) {
         const section = updatedRoadmap.sections[i];
@@ -187,6 +406,9 @@ const RoadmapResultPage = () => {
             try {
               const searchQuery = `${section.title} ${topic.title.replace(/^Complete\s+/i, '').replace(/[()]/g, '')}`;
               console.log(`Finding video for: ${searchQuery}`);
+              
+              // Update current topic being processed
+              setCurrentTopic(`${section.title}: ${topic.title}`);
               
               const isAdvancedTopic = section.difficulty === 'advanced' || 
                                      section.title.toLowerCase().includes('advanced');
@@ -219,6 +441,14 @@ const RoadmapResultPage = () => {
                     directViewCount: videoOrPlaylist.directViewCount,
                     directViewCountFormatted: videoOrPlaylist.directViewCountFormatted
                   };
+                  
+                  // Add to found resources list for display
+                  setFoundResources(prev => [...prev, {
+                    title: videoOrPlaylist.title,
+                    type: 'playlist',
+                    videoCount: videoOrPlaylist.videoCount || videoOrPlaylist.video_count || videoOrPlaylist.videos?.length || 0,
+                    thumbnail: videoOrPlaylist.videos?.[0]?.thumbnail || `https://img.youtube.com/vi/${videoOrPlaylist.videos?.[0]?.id || ''}/mqdefault.jpg`
+                  }]);
                 } else {
                   updatedRoadmap.sections[i].topics[j].video = {
                     title: videoOrPlaylist.title,
@@ -242,14 +472,29 @@ const RoadmapResultPage = () => {
                       thumbnail: `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg`
                     }]
                   };
+                  
+                  // Add to found resources list for display
+                  setFoundResources(prev => [...prev, {
+                    title: videoOrPlaylist.title,
+                    type: 'video',
+                    thumbnail: `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg`
+                  }]);
                 }
                 
                 console.log(`Added ${videoOrPlaylist.isPlaylist ? 'playlist' : 'video'} for "${searchQuery}": ${videoOrPlaylist.title}`);
               }
               
+              // Update progress
+              processedTopics++;
+              setProgressPercent(Math.round((processedTopics / totalTopics) * 100));
+              
               await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (error) {
               console.error(`Error finding video for ${searchQuery}:`, error);
+              
+              // Update progress even on error
+              processedTopics++;
+              setProgressPercent(Math.round((processedTopics / totalTopics) * 100));
             }
           }
         }
@@ -258,10 +503,16 @@ const RoadmapResultPage = () => {
       setRoadmap(updatedRoadmap);
       localStorage.setItem('roadmapData', JSON.stringify(updatedRoadmap));
       await saveResourcesToJson(updatedRoadmap);
-      navigate('/roadmap-progress');
+      
+      // Close modal and navigate after a short delay to show 100% completion
+      setTimeout(() => {
+        setShowResourceLoadingModal(false);
+        navigate('/roadmap-progress');
+      }, 1500);
     } catch (error) {
       console.error('Error finding YouTube resources:', error);
       setError('Failed to find YouTube resources. Please try again.');
+      setShowResourceLoadingModal(false);
     } finally {
       setLoadingVideos(false);
     }
@@ -274,12 +525,39 @@ const RoadmapResultPage = () => {
     window.location.reload();
   };
 
+  // Add export roadmap function
+  const handleExportRoadmap = () => {
+    if (!roadmap) return;
+    
+    try {
+      const result = downloadRoadmap(roadmap);
+      if (result.success) {
+        toast.success('Roadmap exported successfully');
+      } else {
+        toast.error('Failed to export roadmap');
+      }
+    } catch (error) {
+      console.error('Error exporting roadmap:', error);
+      toast.error('Failed to export roadmap');
+    }
+  };
+
   if (loading) {
-    return <RoadmapLoadingState />;
+    return (
+      <>
+        <Navbar />
+        <RoadmapLoadingState />
+      </>
+    );
   }
 
   if (error || !roadmap) {
-    return <RoadmapErrorState error={error} onRetry={handleRetry} />;
+    return (
+      <>
+        <Navbar />
+        <RoadmapErrorState error={error} onRetry={handleRetry} />
+      </>
+    );
   }
 
   return (
@@ -302,33 +580,129 @@ const RoadmapResultPage = () => {
         />
       </div>
 
+      <Navbar />
       <HeroAnimation />
       
-      <RoadmapHeader 
-        title={roadmap.title}
-        description={roadmap.description}
-        onStartJourney={addYouTubeVideos}
-        isLoading={loadingVideos}
+      {/* YouTube Resources Loading Modal */}
+      <ResourceLoadingModal 
+        isOpen={showResourceLoadingModal}
+        currentTopic={currentTopic}
+        progressPercent={progressPercent}
+        foundResources={foundResources}
       />
+      
+      <div className="pt-20">
+        <div className="flex justify-between items-center">
+          <RoadmapHeader 
+            title={roadmap.title}
+            description={roadmap.description}
+            fromSaved={fromSaved}
+            editMode={editMode}
+            setEditMode={setEditMode}
+          />
+        </div>
+  
+        {/* Automatic save notification */}
+        {(savedToDB || savingToDB) && (
+          <div className="px-6 mb-8 flex justify-center">
+            <div className="w-full max-w-2xl">
+              <div className={`flex items-center justify-center ${savingToDB ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-green-600 bg-green-50 border-green-200'} font-medium p-3 rounded-lg shadow-sm border`}>
+                {savingToDB ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Automatically saving your roadmap...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Roadmap saved to your account
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+  
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+          className="max-w-7xl mx-auto px-4 pt-0 pb-16 relative"
+        >
+          {/* Main Learning Path */}
+          <LearningPath sections={roadmap.sections} editMode={editMode} />
 
-      <motion.div 
-        initial="hidden"
-        animate="visible"
-        variants={containerVariants}
-        className="max-w-7xl mx-auto px-4 pt-0 pb-16 relative"
-      >
-        {/* Main Learning Path */}
-        <LearningPath sections={roadmap.sections} />
+          {/* Advanced Challenges Section */}
+          {roadmap.advancedTopics && roadmap.advancedTopics.length > 0 && (
+            <AdvancedChallenges 
+              challenges={roadmap.advancedTopics}
+              editMode={editMode}
+            />
+          )}
 
-        {/* Advanced Challenges Section */}
-        <AdvancedChallenges challenges={roadmap.advancedTopics} />
+          {/* Practice Projects Section */}
+          {roadmap.projects && roadmap.projects.length > 0 && (
+            <PracticeProjects 
+              projects={roadmap.projects}
+              editMode={editMode}
+            />
+          )}
 
-        {/* Practice Projects Section */}
-        <PracticeProjects projects={roadmap.projects} />
+          {/* Footer Section */}
+          <RoadmapFooter 
+            fromSaved={fromSaved}
+            onSave={() => saveRoadmapToDatabase(roadmap)}
+            onAddVideos={addYouTubeVideos}
+            loadingVideos={loadingVideos}
+            savedToDB={savedToDB}
+            savingToDB={savingToDB}
+            onExport={handleExportRoadmap}
+            roadmap={roadmap}
+          />
 
-        {/* Footer Section */}
-        <RoadmapFooter />
-      </motion.div>
+          {/* Save Button - Only show for roadmaps without resources or if not already saved */}
+          {isAuthenticated && (!hasResources || !savedToDB) && (
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() => saveRoadmapToDatabase(roadmap)}
+                disabled={savingToDB || savedToDB}
+                className={`flex items-center px-6 py-3 rounded-lg shadow-md ${
+                  savingToDB || savedToDB ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+                } text-white font-medium transition-colors`}
+              >
+                {savingToDB ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : savedToDB ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h1a2 2 0 012 2v7a2 2 0 01-2 2H8a2 2 0 01-2-2v-7a2 2 0 012-2h1v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
+                    </svg>
+                    Save to Profile
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 };

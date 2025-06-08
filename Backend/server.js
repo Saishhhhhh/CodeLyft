@@ -15,6 +15,8 @@ const connectDB = require('./config/db');
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const passwordRoutes = require('./routes/passwordRoutes');
+const roadmapRoutes = require('./routes/roadmapRoutes');
+const noteRoutes = require('./routes/noteRoutes');
 
 // Connect to MongoDB
 connectDB();
@@ -63,6 +65,8 @@ app.use(passport.session());
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/password', passwordRoutes);
+app.use('/api', roadmapRoutes);
+app.use('/api', noteRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

@@ -16,9 +16,9 @@ import { decodeUnicode, formatDuration } from '../utils/videoUtils';
  */
 const TopicSection = ({
   topic,
-  completedVideos,
-  videoNotes,
-  noteTimestamps,
+  completedVideos = {},
+  videoNotes = {},
+  noteTimestamps = {},
   onToggleVideoComplete,
   onPlayVideo,
   onAddNote,
@@ -33,8 +33,10 @@ const TopicSection = ({
 
   const handleThumbnailClick = (e) => {
     e.preventDefault();
-    if (topic.video.url) {
-      onPlaylistClick(topic.video.url);
+    // Try to get the URL from topic.video.url or from the first video if available
+    const playlistUrl = topic.video.url || (topic.video.videos && topic.video.videos.length > 0 ? topic.video.videos[0].url : null);
+    if (playlistUrl) {
+      onPlaylistClick(playlistUrl);
     }
   };
 
@@ -113,7 +115,7 @@ const TopicSection = ({
                   <div className="relative">
                     <input
                       type="checkbox"
-                      checked={completedVideos[video.id] || false}
+                      checked={completedVideos && completedVideos[video.id] || false}
                       onChange={() => onToggleVideoComplete(video.id)}
                       className="peer h-6 w-6 cursor-pointer appearance-none rounded-md border-2 border-gray-300 transition-all checked:border-orange-500 checked:bg-orange-500 hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                     />
@@ -165,6 +167,7 @@ const TopicSection = ({
                             {video.channel}
                           </span>
                         </div>
+                        
                         <button
                           onClick={() => onAddNote(video.id)}
                           className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -172,12 +175,12 @@ const TopicSection = ({
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
-                          <span className="font-medium">{videoNotes[video.id] ? 'Edit Notes' : 'Add Notes'}</span>
+                          <span className="font-medium">{videoNotes && videoNotes[video.id] ? 'Edit Notes' : 'Add Notes'}</span>
                         </button>
                       </div>
                     </div>
 
-                    {videoNotes[video.id] && (
+                    {videoNotes && videoNotes[video.id] && (
                       <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-100">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center space-x-2">
@@ -186,7 +189,7 @@ const TopicSection = ({
                             </svg>
                             <span className="text-sm font-medium text-orange-700">Notes</span>
                           </div>
-                          {noteTimestamps[video.id] && (
+                          {noteTimestamps && noteTimestamps[video.id] && (
                             <span className="text-xs text-orange-600">
                               Last edited: {formatDate(noteTimestamps[video.id])}
                             </span>

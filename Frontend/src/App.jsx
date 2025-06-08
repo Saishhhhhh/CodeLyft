@@ -12,6 +12,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import EmailVerificationPage from './pages/EmailVerificationPage';
 import Dashboard from './pages/Dashboard';
+import MyRoadmapsPage from './pages/MyRoadmapsPage';
+import RoadmapDetailPage from './pages/RoadmapDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useAuth } from './context/AuthContext';
 import { useEffect } from 'react';
@@ -156,6 +158,42 @@ function App() {
         element={
           <ProtectedRoute>
             <EmailVerificationPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/my-roadmaps" 
+        element={
+          <ProtectedRoute>
+            <MyRoadmapsPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Two separate roadmap detail routes */}
+      <Route 
+        path="/roadmaps/:id/view" 
+        element={
+          <ProtectedRoute>
+            <RoadmapResultPage fromSaved={true} />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/roadmaps/:id/resources" 
+        element={
+          <ProtectedRoute>
+            <RoadmapProgressPage fromSaved={true} />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Legacy route for backward compatibility */}
+      <Route 
+        path="/roadmaps/:id" 
+        element={
+          <ProtectedRoute>
+            <RoadmapDetailPage />
           </ProtectedRoute>
         } 
       />

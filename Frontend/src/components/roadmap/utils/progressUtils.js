@@ -58,41 +58,53 @@ export const checkAllVideosCompleted = (roadmap, completedVideos) => {
  * @returns {Array} Array of grouped sections
  */
 export const groupSectionsBySharedResources = (sections) => {
-  const resourceMap = new Map();
-  const sectionGroups = [];
-  const processedSections = new Set();
-
-  // First, find all shared resources across sections
+  // Create a map of resources by URL to identify shared resources
+  const resourcesByUrl = new Map();
+  
+  // First pass: collect all resources by URL
   sections.forEach((section, sectionIndex) => {
     section.topics.forEach(topic => {
-      if (topic.video && topic.video.url) {
-        const resourceKey = topic.video.url;
-        if (!resourceMap.has(resourceKey)) {
-          resourceMap.set(resourceKey, []);
-        }
-        resourceMap.get(resourceKey).push(sectionIndex);
+      if (topic.video?.videos) {
+        topic.video.videos.forEach(video => {
+          if (!resourcesByUrl.has(video.url)) {
+            resourcesByUrl.set(video.url, []);
+          }
+          resourcesByUrl.get(video.url).push({
+            sectionIndex,
+            sectionTitle: section.title,
+            topicTitle: topic.title
+          });
+        });
       }
     });
   });
-
-  // Group sections that share resources
+  
+  // Find sections that share resources
+  const sectionGroups = [];
+  const processedSections = new Set();
+  
   sections.forEach((section, sectionIndex) => {
     if (processedSections.has(sectionIndex)) return;
-
-    // Find all sections that share resources with this section
+    
+    // Find all sections that share resources with this one
     const sharedSections = new Set([sectionIndex]);
+    
     section.topics.forEach(topic => {
-      if (topic.video && topic.video.url) {
-        const resourceKey = topic.video.url;
-        resourceMap.get(resourceKey)?.forEach(otherIndex => {
-          if (otherIndex !== sectionIndex) {
-            sharedSections.add(otherIndex);
+      if (topic.video?.videos) {
+        topic.video.videos.forEach(video => {
+          const sharedResources = resourcesByUrl.get(video.url);
+          if (sharedResources && sharedResources.length > 1) {
+            sharedResources.forEach(resource => {
+              if (resource.sectionIndex !== sectionIndex) {
+                sharedSections.add(resource.sectionIndex);
+              }
+            });
           }
         });
       }
     });
-
-    // Create a combined section
+    
+    // Create a combined section or add as is
     if (sharedSections.size > 1) {
       const sharedSectionsArray = Array.from(sharedSections);
       const combinedSection = {
@@ -104,20 +116,72 @@ export const groupSectionsBySharedResources = (sections) => {
           description: sections[index].description
         })),
         // Use the first section's topics since they share resources
-        topics: sections[sharedSectionsArray[0]].topics,
+        topics: sections[sharedSectionsArray[0]].topics.map(topic => {
+          // Add sharedWith information to videos if available
+          if (topic.video?.videos) {
+            const updatedVideos = topic.video.videos.map(video => {
+              const sharedResources = resourcesByUrl.get(video.url);
+              if (sharedResources && sharedResources.length > 1) {
+                return {
+                  ...video,
+                  sharedWith: sharedResources
+                    .filter(r => r.sectionIndex !== sharedSectionsArray[0])
+                    .map(r => r.sectionTitle)
+                };
+              }
+              return video;
+            });
+            
+            return {
+              ...topic,
+              video: {
+                ...topic.video,
+                videos: updatedVideos
+              }
+            };
+          }
+          return topic;
+        }),
         originalIndices: sharedSectionsArray
       };
       sectionGroups.push(combinedSection);
       sharedSections.forEach(index => processedSections.add(index));
     } else {
-      sectionGroups.push({
+      // Add section as is, but enhance with sharedWith information
+      const enhancedSection = {
         ...section,
         technologies: [{
           title: section.title,
           description: section.description
         }],
+        topics: section.topics.map(topic => {
+          if (topic.video?.videos) {
+            const updatedVideos = topic.video.videos.map(video => {
+              const sharedResources = resourcesByUrl.get(video.url);
+              if (sharedResources && sharedResources.length > 1) {
+                return {
+                  ...video,
+                  sharedWith: sharedResources
+                    .filter(r => r.sectionIndex !== sectionIndex)
+                    .map(r => r.sectionTitle)
+                };
+              }
+              return video;
+            });
+            
+            return {
+              ...topic,
+              video: {
+                ...topic.video,
+                videos: updatedVideos
+              }
+            };
+          }
+          return topic;
+        }),
         originalIndices: [sectionIndex]
-      });
+      };
+      sectionGroups.push(enhancedSection);
       processedSections.add(sectionIndex);
     }
   });

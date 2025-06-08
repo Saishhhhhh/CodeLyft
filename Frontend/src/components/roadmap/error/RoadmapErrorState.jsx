@@ -56,7 +56,7 @@ const RoadmapErrorState = ({ error, onRetry }) => {
         initial="hidden"
         animate="visible"
         variants={containerVariants}
-        className="max-w-7xl mx-auto px-4 pt-24 pb-16 relative"
+        className="max-w-7xl mx-auto px-4 pt-32 pb-16 relative"
       >
         {/* Header Section */}
         <motion.div variants={itemVariants} className="text-center mb-20">

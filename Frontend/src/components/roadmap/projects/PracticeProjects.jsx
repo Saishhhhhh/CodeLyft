@@ -44,7 +44,11 @@ const cardVariants = {
   }
 };
 
-const getDifficultyStyle = (difficulty) => {
+const getDifficultyStyle = (difficulty, editMode) => {
+  if (editMode) {
+    return 'bg-gray-100 text-gray-700';
+  }
+  
   switch (difficulty) {
     case 'beginner':
       return 'bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-700';
@@ -55,7 +59,7 @@ const getDifficultyStyle = (difficulty) => {
   }
 };
 
-const PracticeProjects = ({ projects }) => {
+const PracticeProjects = ({ projects, editMode }) => {
   if (!projects || projects.length === 0) {
     return null;
   }
@@ -85,26 +89,26 @@ const PracticeProjects = ({ projects }) => {
           <motion.div
             key={index}
             variants={cardVariants}
-            whileHover="hover"
-            className="group relative"
+            whileHover={!editMode ? "hover" : undefined}
+            className={`group relative ${editMode ? 'cursor-default' : ''}`}
           >
             <motion.div 
-              className="absolute -inset-0.5 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-300"
-              whileHover={{ scale: 1.02 }}
+              className={`absolute -inset-0.5 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded-xl blur opacity-20 ${!editMode ? 'group-hover:opacity-40' : ''} transition duration-300`}
+              whileHover={!editMode ? { scale: 1.02 } : undefined}
             />
-            <div className="relative bg-white rounded-xl border border-indigo-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
+            <div className={`relative bg-white rounded-xl border ${editMode ? 'border-gray-300' : 'border-indigo-100'} shadow-sm ${!editMode ? 'hover:shadow-md' : ''} transition-all duration-300 overflow-hidden`}>
               <div className="p-5">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 group-hover:from-indigo-500 group-hover:via-purple-500 group-hover:to-pink-500 transition-colors duration-200">
+                    <h3 className={`text-xl font-semibold ${editMode ? 'text-gray-700' : 'text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 group-hover:from-indigo-500 group-hover:via-purple-500 group-hover:to-pink-500'} transition-colors duration-200`}>
                       {project.title}
                     </h3>
-                    <span className={`px-3 py-1 rounded-lg text-sm font-medium ${getDifficultyStyle(project.difficulty)}`}>
+                    <span className={`px-3 py-1 rounded-lg text-sm font-medium ${getDifficultyStyle(project.difficulty, editMode)}`}>
                       {project.difficulty}
                     </span>
                   </div>
                   {project.description && (
-                    <p className="text-sm text-indigo-600/80 leading-relaxed">
+                    <p className={`text-sm ${editMode ? 'text-gray-500' : 'text-indigo-600/80'} leading-relaxed`}>
                       {project.description}
                     </p>
                   )}

@@ -1,0 +1,77 @@
+{
+  "title": "Sample React Learning Roadmap",
+  "description": "A comprehensive roadmap to learn React from beginner to advanced level",
+  "category": "Web Development",
+  "difficulty": "Intermediate",
+  "sections": [
+    {
+      "title": "JavaScript Fundamentals",
+      "description": "Master the core JavaScript concepts needed for React development",
+      "resources": [
+        {
+          "title": "JavaScript Crash Course",
+          "url": "https://www.youtube.com/watch?v=hdI2bqOjy3c",
+          "type": "video",
+          "description": "Learn JavaScript fundamentals in 1 hour",
+          "thumbnailUrl": "https://i.ytimg.com/vi/hdI2bqOjy3c/hqdefault.jpg",
+          "source": "YouTube",
+          "duration": 3600,
+          "isRequired": true
+        },
+        {
+          "title": "ES6 Features You Need to Know",
+          "url": "https://www.youtube.com/watch?v=NCwa_xi0Uuc",
+          "type": "video",
+          "description": "Modern JavaScript features used in React",
+          "thumbnailUrl": "https://i.ytimg.com/vi/NCwa_xi0Uuc/hqdefault.jpg",
+          "source": "YouTube",
+          "duration": 1800,
+          "isRequired": true
+        }
+      ]
+    },
+    {
+      "title": "React Basics",
+      "description": "Learn the fundamentals of React including components, props, and state",
+      "resources": [
+        {
+          "title": "React Tutorial for Beginners",
+          "url": "https://www.youtube.com/watch?v=SqcY0GlETPk",
+          "type": "video",
+          "description": "Complete React tutorial for beginners",
+          "thumbnailUrl": "https://i.ytimg.com/vi/SqcY0GlETPk/hqdefault.jpg",
+          "source": "YouTube",
+          "duration": 5400,
+          "isRequired": true
+        }
+      ]
+    },
+    {
+      "title": "State Management",
+      "description": "Learn different state management approaches in React",
+      "resources": []
+    }
+  ],
+  "advancedTopics": [
+    {
+      "title": "React Performance Optimization",
+      "description": "Advanced techniques to optimize React application performance"
+    },
+    {
+      "title": "Server Components",
+      "description": "Learn about React Server Components and their benefits"
+    }
+  ],
+  "projects": [
+    {
+      "title": "Todo Application",
+      "description": "Build a simple todo application with React",
+      "difficulty": "beginner"
+    },
+    {
+      "title": "E-commerce Dashboard",
+      "description": "Create an e-commerce admin dashboard with React and state management",
+      "difficulty": "intermediate"
+    }
+  ]
+} 

@@ -463,22 +463,35 @@ function prepareApiResponse(content) {
     fixedJson = '['.repeat(closeBrackets - openBrackets) + fixedJson;
   }
   
+  // Fix common JSON syntax errors before parsing
+  // 1. Fix missing commas after properties (common issue in LLM outputs)
+  fixedJson = fixedJson.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*")/g, '"$1": "$2",\n  "');
+  fixedJson = fixedJson.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*})/g, '"$1": "$2"\n  }');
+  fixedJson = fixedJson.replace(/"([^"]+)"\s*:\s*([^",\s\n\r\t{}]+)\s*(\n\s*")/g, '"$1": $2,\n  "');
+  
+  // 2. Fix the specific issue seen in logs - missing comma between description and difficulty
+  fixedJson = fixedJson.replace(/"description"\s*:\s*"([^"]*)"\s*"difficulty"/g, '"description": "$1", "difficulty"');
+  
   return fixedJson;
 }
 
 export const generateLearningRoadmap = async (userData) => {
-  try {
-    console.log("Generating roadmap with user data:", userData);
-    
-    // Get relevant roadmap.sh context
-    const roadmapShContext = getRoadmapShContext(userData.topic);
-    
-    const requestBody = {
-      model: 'llama3-70b-8192',
-      messages: [
-        {
-          role: 'system',
-          content: `Create a simple, straightforward learning roadmap for the requested topic. You have access to validated learning paths from roadmap.sh that you should use as a reference.
+  let retryCount = 0;
+  let currentKey = GROQ_API_KEYS[currentKeyIndex];
+  
+  while (retryCount < GROQ_MAX_RETRIES) {
+    try {
+      console.log("Generating roadmap with user data:", userData);
+      
+      // Get relevant roadmap.sh context
+      const roadmapShContext = getRoadmapShContext(userData.topic);
+      
+      const requestBody = {
+        model: 'llama3-70b-8192',
+        messages: [
+          {
+            role: 'system',
+            content: `Create a simple, straightforward learning roadmap for the requested topic. You have access to validated learning paths from roadmap.sh that you should use as a reference.
 
 ${roadmapShContext}
 
@@ -539,10 +552,10 @@ The roadmap should follow this EXACT schema:
     }
   ]
 }`
-        },
-        {
-          role: 'user',
-          content: `I want to learn ${userData.topic}.
+          },
+          {
+            role: 'user',
+            content: `I want to learn ${userData.topic}.
 
 My current experience level: ${userData.experienceLevel}
 
@@ -551,42 +564,64 @@ My learning goals: ${userData.learningGoal}
 My time commitment: ${userData.timeCommitment}
 
 Please create a simple roadmap with valid JSON syntax that covers just the main technologies/topics I need to learn. Include prerequisites, advanced topics, and practice projects.`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      };
+      
+      console.log("Sending request to Groq API with body:", JSON.stringify(requestBody));
+      
+      const response = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${currentKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log("Response status:", response.status);
+      
+      if (response.status === 429) { // Rate limit
+        retryCount++;
+        if (retryCount < GROQ_MAX_RETRIES) {
+          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
+          currentKey = getNextGroqApiKey();
+          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
+          continue;
+        } else {
+          throw new Error('Max retries reached for Groq API');
         }
-      ],
-      temperature: 0.1,
-      max_tokens: 2000
-    };
-    
-    console.log("Sending request to Groq API with body:", JSON.stringify(requestBody));
-    
-    const response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEYS[currentKeyIndex]}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Failed to generate roadmap: ${response.status} ${response.statusText}`);
+      }
 
-    console.log("Response status:", response.status);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to generate roadmap: ${response.status} ${response.statusText}`);
+      const responseData = await response.json();
+      console.log("Received response from Groq API:", responseData);
+      
+      const content = responseData.choices[0].message.content;
+      console.log("Roadmap content:", content);
+      
+      // Use the simplified parsing approach
+      const simplifiedRoadmap = parseSimplifiedRoadmap(content);
+      
+      return simplifiedRoadmap;
+    } catch (error) {
+      console.error('Error generating roadmap:', error);
+      
+      if (retryCount < GROQ_MAX_RETRIES - 1 && error.message.includes('429')) {
+        retryCount++;
+        console.log(`Retrying after error (${retryCount}/${GROQ_MAX_RETRIES})...`);
+        currentKey = getNextGroqApiKey();
+        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
+        continue;
+      }
+      
+      throw error;
     }
-
-    const responseData = await response.json();
-    console.log("Received response from Groq API:", responseData);
-    
-    const content = responseData.choices[0].message.content;
-    console.log("Roadmap content:", content);
-    
-    // Use the simplified parsing approach
-    const simplifiedRoadmap = parseSimplifiedRoadmap(content);
-    
-    return simplifiedRoadmap;
-  } catch (error) {
-    console.error('Error generating roadmap:', error);
-    throw error;
   }
 };
 
@@ -605,6 +640,15 @@ function parseSimplifiedRoadmap(content) {
         console.log("Extracted JSON from code block, length:", jsonContent.length);
       }
     }
+
+    // Fix common JSON syntax errors before parsing
+    // 1. Fix missing commas after properties (common issue in LLM outputs)
+    jsonContent = jsonContent.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*")/g, '"$1": "$2",\n  "');
+    jsonContent = jsonContent.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*})/g, '"$1": "$2"\n  }');
+    jsonContent = jsonContent.replace(/"([^"]+)"\s*:\s*([^",\s\n\r\t{}]+)\s*(\n\s*")/g, '"$1": $2,\n  "');
+    
+    // 2. Fix the specific issue seen in logs - missing comma between description and difficulty
+    jsonContent = jsonContent.replace(/"description"\s*:\s*"([^"]*)"\s*"difficulty"/g, '"description": "$1", "difficulty"');
 
     // Try to parse the JSON
     const parsedContent = JSON.parse(jsonContent);
@@ -667,6 +711,39 @@ function parseSimplifiedRoadmap(content) {
         braces: `${openBraces}:{, ${closeBraces}:} - ${openBraces === closeBraces ? 'balanced' : 'unbalanced'}`,
         brackets: `${openBrackets}:[, ${closeBrackets}:] - ${openBrackets === closeBrackets ? 'balanced' : 'unbalanced'}`
       });
+      
+      // Try a more aggressive approach to fix the JSON
+      try {
+        // Attempt to manually fix the specific error from the logs
+        if (content.includes('"description": "') && content.includes('"difficulty":')) {
+          const fixedContent = content.replace(/"description"\s*:\s*"([^"]*)"\s*"difficulty"/g, '"description": "$1", "difficulty"');
+          const parsedFixed = JSON.parse(fixedContent);
+          console.log("Successfully parsed after fixing missing comma between description and difficulty");
+          
+          // Convert to the expected format
+          const sections = Array.isArray(parsedFixed.mainPath) ? 
+            parsedFixed.mainPath.map(item => ({
+              title: item.title || "Technology",
+              description: item.description || "Learn this technology",
+              difficulty: item.difficulty || 'beginner',
+              topics: [{
+                title: `Complete ${item.title || "Technology"}`,
+                description: item.description || `Learn ${item.title || "technology"} fundamentals`
+              }]
+            })) : [];
+          
+          return {
+            title: parsedFixed.title || "Learning Roadmap",
+            description: parsedFixed.description || "A comprehensive learning guide",
+            sections: sections,
+            prerequisites: parsedFixed.prerequisites || [],
+            advancedTopics: parsedFixed.advancedTopics || [],
+            projects: parsedFixed.projects || []
+          };
+        }
+      } catch (fixError) {
+        console.error("Failed to fix JSON with manual approach:", fixError);
+      }
     }
     
     // Return null instead of a default roadmap

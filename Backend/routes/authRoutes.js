@@ -11,6 +11,7 @@ const {
 } = require('../controllers/authController');
 const { registerValidation, loginValidation } = require('../middleware/validators');
 const { protect } = require('../middleware/auth');
+const { isAuthenticated } = require('../middleware/authMiddleware');
 
 // Register and login routes
 router.post('/register', registerValidation, register);
@@ -45,5 +46,14 @@ router.get(
   }),
   githubCallback
 );
+
+// Add to the existing routes
+router.get('/check', isAuthenticated, (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: 'User is authenticated',
+    user: req.user
+  });
+});
 
 module.exports = router; 

@@ -83,6 +83,9 @@ const Navbar = () => {
                     <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Dashboard
                     </Link>
+                    <Link to="/my-roadmaps" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      My Roadmaps
+                    </Link>
                     <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Profile Settings
                     </Link>
@@ -167,6 +170,9 @@ const Navbar = () => {
                     
                     <Link to="/dashboard" className="block py-2 text-gray-700 hover:text-purple-600">
                       Dashboard
+                    </Link>
+                    <Link to="/my-roadmaps" className="block py-2 text-gray-700 hover:text-purple-600">
+                      My Roadmaps
                     </Link>
                     <Link to="/profile" className="block py-2 text-gray-700 hover:text-purple-600">
                       Profile Settings
