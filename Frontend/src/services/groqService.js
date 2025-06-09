@@ -664,15 +664,24 @@ function parseSimplifiedRoadmap(content) {
 
     // Convert the mainPath array to the sections format expected by the UI
     const sections = Array.isArray(parsedContent.mainPath) ? 
-      parsedContent.mainPath.map(item => ({
-        title: item.title || "Technology",
-        description: item.description || "Learn this technology",
-        difficulty: item.difficulty || 'beginner',
-        topics: [{
-          title: `Complete ${item.title || "Technology"}`,
-          description: item.description || `Learn ${item.title || "technology"} fundamentals`
-        }]
-      })) : [];
+      parsedContent.mainPath.map(item => {
+        // Normalize the technology name to avoid duplicates like "HTML HTML"
+        const normalizedTitle = item.title ? 
+          item.title.split(' ')
+            .filter((word, index, arr) => arr.indexOf(word) === index)
+            .join(' ') : 
+          "Technology";
+          
+        return {
+          title: normalizedTitle,
+          description: item.description || "Learn this technology",
+          difficulty: item.difficulty || 'beginner',
+          topics: [{
+            title: `Complete ${normalizedTitle}`,
+            description: item.description || `Learn ${normalizedTitle} fundamentals`
+          }]
+        };
+      }) : [];
 
     // Create the roadmap structure for the UI
     const roadmap = {

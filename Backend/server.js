@@ -17,6 +17,7 @@ const authRoutes = require('./routes/authRoutes');
 const passwordRoutes = require('./routes/passwordRoutes');
 const roadmapRoutes = require('./routes/roadmapRoutes');
 const noteRoutes = require('./routes/noteRoutes');
+const resourceRoutes = require('./routes/resourceRoutes');
 
 // Connect to MongoDB
 connectDB();
@@ -67,6 +68,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/password', passwordRoutes);
 app.use('/api', roadmapRoutes);
 app.use('/api', noteRoutes);
+app.use('/api/resources', resourceRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -86,4 +88,4 @@ app.use((err, req, res, next) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-});
+}); 

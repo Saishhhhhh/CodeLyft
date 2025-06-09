@@ -17,6 +17,7 @@ import { toast } from 'react-hot-toast';
 import Navbar from '../components/Navbar';
 import { FaFileExport } from 'react-icons/fa';
 import ResourceLoadingModal from '../components/roadmap/modals/ResourceLoadingModal';
+import { updateSharedResources } from '../services/resourceCache';
 
 const RoadmapResultPage = ({ fromSaved = false }) => {
   const [roadmap, setRoadmap] = useState(null);
@@ -341,7 +342,7 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
                 id: video.id,
                 title: video.title,
                 url: video.url,
-                channel: video.channel?.name || 'Unknown',
+                channel: video.channel?.name || video.channel || 'Unknown',
                 duration: video.duration_string || video.duration || 'Unknown',
                 publishDate: video.publish_date || 'Unknown',
                 completed: progressData.completedVideos[video.id] || false,
@@ -404,7 +405,19 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
           
           if (!topic.video) {
             try {
-              const searchQuery = `${section.title} ${topic.title.replace(/^Complete\s+/i, '').replace(/[()]/g, '')}`;
+              // Fix duplicate technology names in search query
+              const normalizedTopicTitle = topic.title.replace(/^Complete\s+/i, '').replace(/[()]/g, '');
+              
+              // Remove duplicate words (e.g., "HTML HTML" -> "HTML")
+              const normalizedSectionTitle = section.title.split(' ')
+                .filter((word, index, arr) => arr.indexOf(word) === index)
+                .join(' ');
+              
+              const normalizedTopicWords = normalizedTopicTitle.split(' ')
+                .filter((word, index, arr) => arr.indexOf(word) === index)
+                .join(' ');
+                
+              const searchQuery = `${normalizedSectionTitle} ${normalizedTopicWords}`;
               console.log(`Finding video for: ${searchQuery}`);
               
               // Update current topic being processed
@@ -436,7 +449,10 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
                       publish_date: video.publish_date || 'Unknown',
                       views: video.views_formatted || 'N/A',
                       likes: video.likes_formatted || 'N/A',
-                      thumbnail: `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`
+                      thumbnail: video.thumbnail || 
+                                (video.id && /^[a-zA-Z0-9_-]{11}$/.test(video.id) ? 
+                                  `https://img.youtube.com/vi/${video.id}/mqdefault.jpg` : 
+                                  'https://via.placeholder.com/320x180?text=No+Thumbnail')
                     })) || [],
                     directViewCount: videoOrPlaylist.directViewCount,
                     directViewCountFormatted: videoOrPlaylist.directViewCountFormatted
@@ -447,18 +463,26 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
                     title: videoOrPlaylist.title,
                     type: 'playlist',
                     videoCount: videoOrPlaylist.videoCount || videoOrPlaylist.video_count || videoOrPlaylist.videos?.length || 0,
-                    thumbnail: videoOrPlaylist.videos?.[0]?.thumbnail || `https://img.youtube.com/vi/${videoOrPlaylist.videos?.[0]?.id || ''}/mqdefault.jpg`
+                    thumbnail: videoOrPlaylist.videos?.[0]?.thumbnail || 
+                              (videoOrPlaylist.videos?.[0]?.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.videos[0].id) ? 
+                                `https://img.youtube.com/vi/${videoOrPlaylist.videos[0].id}/mqdefault.jpg` : 
+                                'https://via.placeholder.com/320x180?text=No+Thumbnail')
                   }]);
                 } else {
-                  updatedRoadmap.sections[i].topics[j].video = {
+                  // For individual videos
+                  console.log(`Added video for "${topic.title}": ${videoOrPlaylist.title}`);
+                  
+                  // Format the resource for storage
+                  topic.video = {
+                    id: videoOrPlaylist.id,
                     title: videoOrPlaylist.title,
                     url: videoOrPlaylist.url,
-                    channel: videoOrPlaylist.channel?.name || 'Unknown',
+                    channel: videoOrPlaylist.channel?.name || videoOrPlaylist.channel || 'Unknown',
+                    duration: videoOrPlaylist.duration_string || videoOrPlaylist.duration || 'Unknown',
+                    duration_string: videoOrPlaylist.duration_string || videoOrPlaylist.duration || 'Unknown',
+                    publish_date: videoOrPlaylist.publish_date || 'Unknown',
                     views: videoOrPlaylist.views_formatted || 'N/A',
                     likes: videoOrPlaylist.likes_formatted || 'N/A',
-                    rating: videoOrPlaylist.videoRating || videoOrPlaylist.rating || 'N/A',
-                    fallback: videoOrPlaylist.fallback || false,
-                    isPlaylist: false,
                     videos: [{
                       id: videoOrPlaylist.id,
                       title: videoOrPlaylist.title,
@@ -469,7 +493,10 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
                       publish_date: videoOrPlaylist.publish_date || 'Unknown',
                       views: videoOrPlaylist.views_formatted || 'N/A',
                       likes: videoOrPlaylist.likes_formatted || 'N/A',
-                      thumbnail: `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg`
+                      thumbnail: videoOrPlaylist.thumbnail || 
+                                (videoOrPlaylist.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.id) ? 
+                                  `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg` : 
+                                  'https://via.placeholder.com/320x180?text=No+Thumbnail')
                     }]
                   };
                   
@@ -477,7 +504,10 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
                   setFoundResources(prev => [...prev, {
                     title: videoOrPlaylist.title,
                     type: 'video',
-                    thumbnail: `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg`
+                    thumbnail: videoOrPlaylist.thumbnail || 
+                              (videoOrPlaylist.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.id) ? 
+                                `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg` : 
+                                'https://via.placeholder.com/320x180?text=No+Thumbnail')
                   }]);
                 }
                 
@@ -503,6 +533,20 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       setRoadmap(updatedRoadmap);
       localStorage.setItem('roadmapData', JSON.stringify(updatedRoadmap));
       await saveResourcesToJson(updatedRoadmap);
+      
+      // Update shared resources after roadmap generation is complete
+      try {
+        console.log('Analyzing roadmap for shared resources...');
+        setCurrentTopic('Analyzing for shared resources across technologies...');
+        const result = await updateSharedResources(updatedRoadmap);
+        console.log('Shared resources update result:', result);
+        if (result.updatedCount > 0) {
+          toast.success(`Updated ${result.updatedCount} shared resources`);
+        }
+      } catch (error) {
+        console.error('Error updating shared resources:', error);
+        // Non-critical error, don't block the user flow
+      }
       
       // Close modal and navigate after a short delay to show 100% completion
       setTimeout(() => {

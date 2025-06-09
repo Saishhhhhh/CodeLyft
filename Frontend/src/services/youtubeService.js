@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_URL = import.meta.env.VITE_YOUTUBE_API_URL || 'http://127.0.0.1:8000';
 console.log('Using API URL:', API_URL); // Debug log
 // Replace the single API key with an array of keys
 const GROQ_API_KEYS = [
@@ -11,6 +11,9 @@ const GROQ_API_KEYS = [
   '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',
   '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'
 ];
+
+// Import the resource cache service
+import { findResourcesForTechnology, cacheResource } from './resourceCache';
 
 let currentKeyIndex = 0;
 
@@ -159,20 +162,86 @@ const fallbackAreTechnologiesEquivalent = (tech1, tech2) => {
 /**
  * Check if a topic is already covered by a shared resource
  * @param {string} topic - The topic to check
+ * @param {Array<string>} roadmapTopics - All topics in the current roadmap
  * @returns {Promise<Object|null>} - The shared resource if found, null otherwise
  */
-const getSharedResourceForTopic = async (topic) => {
+const getSharedResourceForTopic = async (topic, roadmapTopics = []) => {
   const normalizedTopic = topic.toLowerCase();
   
   // First check for exact matches
   if (sharedResourcesMap.has(normalizedTopic)) {
-    return sharedResourcesMap.get(normalizedTopic);
+    const resource = sharedResourcesMap.get(normalizedTopic);
+    
+    // If we have roadmap topics, verify that all technologies in the shared resource
+    // are part of the roadmap
+    if (roadmapTopics && roadmapTopics.length > 0) {
+      const resourceTopics = getTopicsForResource(resource);
+      
+      // Convert roadmap topics to lowercase for case-insensitive comparison
+      const normalizedRoadmapTopics = roadmapTopics.map(t => t.toLowerCase());
+      
+      // Check if all resource topics are in the roadmap
+      const allTopicsInRoadmap = resourceTopics.every(resourceTopic => {
+        // Check for direct match
+        if (normalizedRoadmapTopics.includes(resourceTopic)) {
+          return true;
+        }
+        
+        // Check for equivalent match
+        for (const roadmapTopic of normalizedRoadmapTopics) {
+          if (fallbackAreTechnologiesEquivalent(resourceTopic, roadmapTopic)) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      if (!allTopicsInRoadmap) {
+        console.log(`Found shared resource for "${topic}" but not all its technologies are in the roadmap. Skipping.`);
+        return null;
+      }
+    }
+    
+    return resource;
   }
   
   // Then check all existing topics for equivalence
   for (const [existingTopic, resource] of sharedResourcesMap.entries()) {
     if (await areTechnologiesEquivalent(normalizedTopic, existingTopic)) {
       console.log(`Found equivalent technology: "${normalizedTopic}" matches "${existingTopic}"`);
+      
+      // If we have roadmap topics, verify that all technologies in the shared resource
+      // are part of the roadmap
+      if (roadmapTopics && roadmapTopics.length > 0) {
+        const resourceTopics = getTopicsForResource(resource);
+        
+        // Convert roadmap topics to lowercase for case-insensitive comparison
+        const normalizedRoadmapTopics = roadmapTopics.map(t => t.toLowerCase());
+        
+        // Check if all resource topics are in the roadmap
+        const allTopicsInRoadmap = resourceTopics.every(resourceTopic => {
+          // Check for direct match
+          if (normalizedRoadmapTopics.includes(resourceTopic)) {
+            return true;
+          }
+          
+          // Check for equivalent match
+          for (const roadmapTopic of normalizedRoadmapTopics) {
+            if (fallbackAreTechnologiesEquivalent(resourceTopic, roadmapTopic)) {
+              return true;
+            }
+          }
+          
+          return false;
+        });
+        
+        if (!allTopicsInRoadmap) {
+          console.log(`Found shared resource for "${topic}" but not all its technologies are in the roadmap. Skipping.`);
+          return null;
+        }
+      }
+      
       return resource;
     }
   }
@@ -1189,19 +1258,105 @@ const fallbackExtractTechnologies = (title, roadmapTopics) => {
 };
 
 /**
- * Find the best YouTube video or playlist for a specific learning topic
- * @param {string} topic - The learning topic to find a video for
+ * Find the best video for a given topic
+ * @param {string} topic - The topic to find a video for
  * @param {boolean} isAdvancedTopic - Whether this is an advanced topic
  * @param {Array<string>} roadmapTopics - List of all topics from the roadmap
  * @returns {Promise<Object|null>} - Best matching video or null if none found
  */
 export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, roadmapTopics = []) => {
   try {
-    // Check if this topic is already covered by a shared resource
-    const existingSharedResource = await getSharedResourceForTopic(topic);
-    if (existingSharedResource) {
-      console.log(`Topic "${topic}" is already covered by shared resource: ${existingSharedResource.title}`);
-      return existingSharedResource;
+    console.log(`Finding best video for topic: "${topic}"`);
+    
+    // First check if this topic is already covered by a shared resource
+    try {
+      const existingSharedResource = await getSharedResourceForTopic(topic, roadmapTopics);
+      if (existingSharedResource) {
+        console.log(`Topic "${topic}" is already covered by shared resource: ${existingSharedResource.title}`);
+        return existingSharedResource;
+      }
+    } catch (sharedError) {
+      console.error('Error checking shared resources:', sharedError);
+      // Continue with cache check if shared resource check fails
+    }
+    
+    // Then check if we have cached resources
+    try {
+      const cachedResult = await findResourcesForTechnology(topic, 1);
+      if (cachedResult.success && cachedResult.data.length > 0) {
+        console.log(`Found cached resource for "${topic}"`);
+        
+        // Format the cached resource to match the expected format
+        const resource = cachedResult.data[0];
+        
+        // Process videos to ensure they have proper thumbnails and other required fields
+        const processedVideos = resource.videos?.map(video => {
+          // Ensure video has a thumbnail
+          let thumbnail = '';
+          if (video.thumbnail) {
+            thumbnail = video.thumbnail;
+          } else if (video.id && /^[a-zA-Z0-9_-]{11}$/.test(video.id)) {
+            thumbnail = `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`;
+          } else {
+            thumbnail = 'https://via.placeholder.com/320x180?text=No+Thumbnail';
+          }
+          
+          // Process channel information
+          let channelName = "Unknown";
+          if (typeof video.channel === 'string') {
+            channelName = video.channel;
+          } else if (video.channel?.name) {
+            channelName = video.channel.name;
+          }
+          
+          return {
+            ...video,
+            thumbnail,
+            channel: channelName,
+            duration_string: video.duration_string || video.duration || "Unknown"
+          };
+        }) || [];
+        
+        // Extract channel name from metadata or first video
+        let channelName = "Unknown";
+        if (typeof resource.metadata.channelName === 'string') {
+          channelName = resource.metadata.channelName;
+        } else if (resource.metadata.channelName?.name) {
+          channelName = resource.metadata.channelName.name;
+        } else if (processedVideos.length > 0) {
+          channelName = processedVideos[0].channel;
+        }
+        
+        const formattedResource = {
+          id: resource._id,
+          title: resource.title,
+          url: resource.url,
+          description: resource.description || "",
+          type: resource.type,
+          isPlaylist: resource.type === 'playlist',
+          channel: channelName,
+          videoCount: resource.metadata.videoCount || processedVideos.length,
+          rating: resource.metadata.rating || "N/A",
+          quality: resource.metadata.quality || "Average",
+          videos: processedVideos,
+          fromCache: true,
+          cachedAt: resource.createdAt,
+          expiresAt: resource.expiresAt,
+          // Add thumbnail if it's a single video
+          ...(resource.type === 'video' && processedVideos.length > 0 ? {
+            thumbnail: processedVideos[0].thumbnail,
+            duration: processedVideos[0].duration,
+            duration_string: processedVideos[0].duration_string,
+            views_formatted: processedVideos[0].views_formatted || "N/A",
+            likes_formatted: processedVideos[0].likes_formatted || "N/A"
+          } : {})
+        };
+        
+        return formattedResource;
+      }
+    } catch (cacheError) {
+      console.error('Error checking resource cache:', cacheError);
+      // Continue with normal search if cache check fails
     }
 
     // Variables to track the best video
@@ -1287,6 +1442,14 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         // If this playlist covers multiple topics, add it to shared resources
         if (matchingTechnologies.length > 1) {
           await addSharedResource(bestPlaylist, matchingTechnologies);
+        }
+        
+        // Cache the resource
+        try {
+          await cacheResource(bestPlaylist, topic);
+          console.log(`Cached exceptional playlist for "${topic}"`);
+        } catch (cacheError) {
+          console.error('Error caching playlist:', cacheError);
         }
         
         return bestPlaylist;
@@ -1477,6 +1640,14 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           await addSharedResource(highestRatedVideo, matchingTechnologies);
         }
         
+        // Cache the resource
+        try {
+          await cacheResource(highestRatedVideo, topic);
+          console.log(`Cached excellent video for "${topic}"`);
+        } catch (cacheError) {
+          console.error('Error caching video:', cacheError);
+        }
+        
         return highestRatedVideo;
       }
       
@@ -1501,6 +1672,14 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
             await addSharedResource(highestRatedVideo, matchingTechnologies);
           }
           
+          // Cache the resource
+          try {
+            await cacheResource(highestRatedVideo, topic);
+            console.log(`Cached video for "${topic}"`);
+          } catch (cacheError) {
+            console.error('Error caching video:', cacheError);
+          }
+          
           return highestRatedVideo;
         } else {
           console.log(`Playlist is better (${playlistScore} > ${normalizedVideoScore.toFixed(1)}), extracting technologies...`);
@@ -1513,6 +1692,14 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           // If this playlist covers multiple topics, add it to shared resources
           if (matchingTechnologies.length > 1) {
             await addSharedResource(bestPlaylist, matchingTechnologies);
+          }
+          
+          // Cache the resource
+          try {
+            await cacheResource(bestPlaylist, topic);
+            console.log(`Cached playlist for "${topic}"`);
+          } catch (cacheError) {
+            console.error('Error caching playlist:', cacheError);
           }
           
           return bestPlaylist;
@@ -1532,6 +1719,14 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         await addSharedResource(highestRatedVideo, matchingTechnologies);
       }
       
+      // Cache the resource
+      try {
+        await cacheResource(highestRatedVideo, topic);
+        console.log(`Cached video for "${topic}"`);
+      } catch (cacheError) {
+        console.error('Error caching video:', cacheError);
+      }
+      
       return highestRatedVideo;
     }
     
@@ -1549,6 +1744,14 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         await addSharedResource(bestPlaylist, matchingTechnologies);
       }
       
+      // Cache the resource
+      try {
+        await cacheResource(bestPlaylist, topic);
+        console.log(`Cached playlist for "${topic}"`);
+      } catch (cacheError) {
+        console.error('Error caching playlist:', cacheError);
+      }
+      
       return bestPlaylist;
     }
     
@@ -1564,7 +1767,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       videoRating: '0.0'
     };
   } catch (error) {
-    console.error(`Error finding video for topic "${topic}":`, error);
+    console.error(`Error finding best video for topic "${topic}":`, error);
     
     // Return a fallback search URL on error
     return {
