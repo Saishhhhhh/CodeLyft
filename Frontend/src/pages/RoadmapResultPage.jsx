@@ -258,8 +258,19 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
           const result = await generateRoadmapWithRetry(data);
           console.log('Generated roadmap result:', result);
           
+          // Transform the mainPath into sections format that LearningPath component expects
+          const transformedResult = {
+            ...result,
+            sections: result.mainPath.map(item => ({
+              title: item.title,
+              description: item.description,
+              difficulty: item.difficulty,
+              topics: [{ title: item.title, description: item.description }]
+            }))
+          };
+          
           // Set the roadmap state
-          setRoadmap(result);
+          setRoadmap(transformedResult);
           setError(null);
           setLoading(false);
           

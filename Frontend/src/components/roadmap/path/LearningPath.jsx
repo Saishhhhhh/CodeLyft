@@ -111,7 +111,7 @@ const LearningPath = ({ sections, editMode }) => {
                 {/* Topics Grid */}
                 <div className="p-3 bg-gradient-to-br from-indigo-50/50 via-purple-50/50 to-pink-50/50">
                   <div className="grid gap-3">
-                    {section.topics?.map((topic, topicIndex) => (
+                    {(section.topics ?? []).map((topic, topicIndex) => (
                       <motion.div
                         key={topicIndex}
                         initial={{ opacity: 0, y: 20 }}

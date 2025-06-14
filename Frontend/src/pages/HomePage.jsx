@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HeroAnimation from '../components/HeroAnimation';
-import { validateLearningTopic } from '../services/groqService';
+import { validateAndGenerateQuestions } from '../services/groqService';
 
 const HomePage = () => {
   const [learningTopic, setLearningTopic] = useState('');
@@ -15,19 +15,27 @@ const HomePage = () => {
     setIsValidating(true);
 
     try {
-      const validationResult = await validateLearningTopic(learningTopic);
+      // Start the timer
+      const startTime = performance.now();
       
-      if (!validationResult.isValid) {
+      const result = await validateAndGenerateQuestions(learningTopic);
+      
+      // End the timer and log the duration
+      const endTime = performance.now();
+      console.log(`Combined validation and question generation took ${(endTime - startTime).toFixed(2)} ms`);
+      
+      if (!result.validation.isValid) {
         setError({
-          message: validationResult.reason,
-          example: validationResult.example
+          message: result.validation.reason,
+          example: result.validation.example
         });
         setIsValidating(false);
         return;
       }
 
-      // Store the extracted learning topic in localStorage
-      localStorage.setItem('learningTopic', validationResult.extractedTopic);
+      // Store both the extracted learning topic and questions in localStorage
+      localStorage.setItem('learningTopic', result.validation.extractedTopic);
+      localStorage.setItem('preGeneratedQuestions', JSON.stringify(result.questions));
       
       // Navigate to the questions page
       navigate('/questions');

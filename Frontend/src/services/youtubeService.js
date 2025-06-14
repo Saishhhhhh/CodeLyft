@@ -1,140 +1,167 @@
 const API_URL = import.meta.env.VITE_YOUTUBE_API_URL || 'http://127.0.0.1:8000';
 console.log('Using API URL:', API_URL); // Debug log
-// Replace the single API key with an array of keys
-const GROQ_API_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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'
+
+// OpenRouter API keys for video/content relevance checks
+const OPENROUTER_API_KEYS = [
+  import.meta.env.VITE_OPENROUTER_API_KEY_1,
+  import.meta.env.VITE_OPENROUTER_API_KEY_2,
+  import.meta.env.VITE_OPENROUTER_API_KEY_3
 ];
+
+// Together AI API keys for technology equivalence
+const TOGETHER_API_KEYS = [
+  import.meta.env.VITE_TOGETHER_API_KEY_1,
+  import.meta.env.VITE_TOGETHER_API_KEY_2,
+  import.meta.env.VITE_TOGETHER_API_KEY_3,
+  import.meta.env.VITE_TOGETHER_API_KEY_4,
+];
+
+// Import Together AI library
+import Together from "together-ai";
 
 // Import the resource cache service
 import { findResourcesForTechnology, cacheResource } from './resourceCache';
 
-let currentKeyIndex = 0;
+let openRouterKeyIndex = 0;
+let togetherKeyIndex = 0;
 
-/**
- * Get the next available Groq API key
- * @returns {string} The next API key to use
- */
-const getNextGroqApiKey = () => {
-  currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
-  return GROQ_API_KEYS[currentKeyIndex];
+// Track API call timestamps for rate limiting
+const API_CALL_TIMESTAMPS = {
+  openrouter: [],
+  together: []
 };
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_RATE_LIMIT_DELAY = 5000; // Increase delay to 5 seconds
-const GROQ_MAX_RETRIES = 3;
+// Rate limiting configuration
+const RATE_LIMITS = {
+  openrouter: {
+    requestsPerMinute: 10,
+    windowMs: 60000 // 1 minute in milliseconds
+  },
+  together: {
+    requestsPerMinute: 10,
+    windowMs: 60000 // 1 minute in milliseconds
+  }
+};
 
-// Flag to control whether to use Groq for relevance checking
+/**
+ * Check if we've exceeded rate limits for a specific API
+ * @param {string} apiType - Either 'openrouter' or 'together'
+ * @returns {boolean} - True if rate limit exceeded, false otherwise
+ */
+const isRateLimited = (apiType) => {
+  const now = Date.now();
+  const config = RATE_LIMITS[apiType];
+  const timestamps = API_CALL_TIMESTAMPS[apiType];
+  
+  // Remove timestamps older than the window
+  const recentTimestamps = timestamps.filter(ts => (now - ts) < config.windowMs);
+  API_CALL_TIMESTAMPS[apiType] = recentTimestamps;
+  
+  // Check if we've exceeded the rate limit
+  return recentTimestamps.length >= config.requestsPerMinute;
+};
+
+/**
+ * Record an API call timestamp for rate limiting
+ * @param {string} apiType - Either 'openrouter' or 'together'
+ */
+const recordApiCall = (apiType) => {
+  API_CALL_TIMESTAMPS[apiType].push(Date.now());
+};
+
+/**
+ * Get the next available OpenRouter API key
+ * @returns {string} The next API key to use
+ */
+const getNextOpenRouterApiKey = () => {
+  openRouterKeyIndex = (openRouterKeyIndex + 1) % OPENROUTER_API_KEYS.length;
+  return OPENROUTER_API_KEYS[openRouterKeyIndex];
+};
+
+/**
+ * Get the next available Together AI API key
+ * @returns {string} The next API key to use
+ */
+const getNextTogetherApiKey = () => {
+  togetherKeyIndex = (togetherKeyIndex + 1) % TOGETHER_API_KEYS.length;
+  return TOGETHER_API_KEYS[togetherKeyIndex];
+};
+
+/**
+ * Create a new Together AI client with the specified API key
+ * @param {string} apiKey - The API key to use
+ * @returns {Together} - A new Together AI client
+ */
+const createTogetherClient = (apiKey) => {
+  return new Together({ 
+    apiKey,
+    retries: 0, // We'll handle retries ourselves
+    timeout: 30000 // 30 second timeout
+  });
+};
+
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const API_RATE_LIMIT_DELAY = 5000; // 5 seconds
+const API_MAX_RETRIES = 3;
+
+// Flag to control whether to use LLMs for relevance checking
 // Set to false to avoid excessive API calls during development
 // Note: Playlist relevance checking now happens through the backend /find/best-playlist API
-const ENABLE_GROQ_RELEVANCE = false;
+const ENABLE_LLM_RELEVANCE = false;
 
 // Track shared resources to avoid redundant searches
 const sharedResourcesMap = new Map();
 const sharedResourceTopics = new Map(); // New map to track topics for each resource
 
 /**
- * Use Groq to check if two technology names are equivalent
+ * Check if two technology names are equivalent using the sentence-transformers API
  * @param {string} tech1 - First technology name
  * @param {string} tech2 - Second technology name
  * @returns {Promise<boolean>} - Whether the technologies are equivalent
  */
 const areTechnologiesEquivalent = async (tech1, tech2) => {
-  let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
+  // Quick check for exact matches or simple cases
+  if (tech1.toLowerCase() === tech2.toLowerCase()) {
+    return true;
+  }
   
-  while (retryCount < GROQ_MAX_RETRIES) {
+  const TECH_MATCHER_API_URL = import.meta.env.VITE_TECH_MATCHER_API_URL || 'http://localhost:8000';
+  let retryCount = 0;
+  const maxRetries = 3;
+  let backoffDelay = 1000; // Start with 1 second
+  
+  while (retryCount < maxRetries) {
     try {
-      console.log(`Checking if technologies are equivalent: "${tech1}" and "${tech2}" (Attempt ${retryCount + 1}/${GROQ_MAX_RETRIES})`);
+      console.log(`Checking if technologies are equivalent: "${tech1}" and "${tech2}" (Attempt ${retryCount + 1}/${maxRetries})`);
       
-      const response = await fetch(GROQ_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${currentKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama3-70b-8192',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a technology name matcher. Your task is to determine if two technology names refer to the same technology.
-
-              Rules:
-              1. Consider common variations and abbreviations (e.g., "Node.js" = "NodeJS" = "Node JS")
-              2. Consider version numbers as part of the name (e.g., "React 18" = "React.js 18")
-              3. Ignore case differences
-              4. Consider framework/library relationships (e.g., "Express" = "Express.js")
-              5. Be strict about different technologies (e.g., "Node.js" ≠ "Deno")
-              
-              Respond with a JSON object containing:
-              {
-                "areEquivalent": boolean,
-                "explanation": "brief explanation of your decision",
-                "confidence": number (0-1)
-              }
-
-              IMPORTANT: Return ONLY the JSON object, no markdown formatting or additional text.`
-            },
-            {
-              role: 'user',
-              content: `Are these technologies equivalent?
-              Technology 1: "${tech1}"
-              Technology 2: "${tech2}"`
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 150,
-          response_format: { type: "json_object" }
-        })
-      });
-
-      if (response.status === 429) {
-        retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-          continue;
-        } else {
-          console.log('Max retries reached for Groq API. Using fallback technology matching.');
-          return fallbackAreTechnologiesEquivalent(tech1, tech2);
-        }
-      }
+      // Call the tech matcher API
+      const response = await fetch(`${TECH_MATCHER_API_URL}/match?tech1=${encodeURIComponent(tech1)}&tech2=${encodeURIComponent(tech2)}`);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`Groq API error (${response.status}):`, errorData);
-        throw new Error(`Failed to check technology equivalence: ${response.status} ${response.statusText}`);
+        throw new Error(`API returned status: ${response.status}`);
       }
 
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const result = await response.json();
       
-      try {
-        const result = JSON.parse(cleanContent);
-        console.log(`Technology equivalence result: ${result.areEquivalent ? 'EQUIVALENT' : 'DIFFERENT'} (confidence: ${result.confidence})`);
+      console.log(`Technology equivalence result: ${result.areEquivalent ? 'EQUIVALENT' : 'DIFFERENT'} (similarity: ${result.similarity.toFixed(2)})`);
         console.log(`Explanation: ${result.explanation}`);
+      
         return result.areEquivalent;
-      } catch (parseError) {
-        console.error('Failed to parse Groq result:', parseError);
-        return fallbackAreTechnologiesEquivalent(tech1, tech2);
-      }
     } catch (error) {
       console.error('Error checking technology equivalence:', error);
-      if (retryCount < GROQ_MAX_RETRIES - 1) {
+      
         retryCount++;
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
+      
+      if (retryCount < maxRetries) {
+        // Apply exponential backoff
+        console.log(`API error. Retrying with backoff (${backoffDelay}ms)...`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        backoffDelay *= 2; // Exponential backoff
         continue;
       }
+      
+      // If all retries fail, use fallback method
+      console.log('Using fallback technology matching method');
       return fallbackAreTechnologiesEquivalent(tech1, tech2);
     }
   }
@@ -363,98 +390,107 @@ export const getPlaylistVideos = async (playlistUrl, limit = 0, maxDetails = 999
 };
 
 /**
- * Search YouTube for videos based on a query
+ * Search YouTube for videos matching a query
  * @param {string} query - The search query
- * @param {number} limit - Maximum number of results to return (not used in API call)
+ * @param {number} limit - Maximum number of results to return
  * @param {Object} options - Additional search options
- * @returns {Promise<Object>} - Search results from YouTube
+ * @returns {Promise<Array>} - Array of search results
  */
-export const searchYouTube = async (query, limit = 15, options = {}) => {
+export const searchYouTube = async (query, limit = 10, options = {}) => {
   try {
-    // Build query parameters - only include the query parameter
+    console.log(`Searching YouTube for: "${query}" (limit: ${limit})`);
+    
+    // Extract options
+    const { 
+      contentType, 
+      minDuration, 
+      maxDuration,
+      filterTechnology,
+      useEmbeddings = true,
+      useGroqRelevance = false,
+      useBatchRelevance = true  // New option to enable batch relevance checking
+    } = options;
+    
+    // Prepare the API URL with query parameters
     const params = new URLSearchParams({
-      query
+      query,
+      limit
     });
+    
+    // Add optional parameters if provided
+    if (contentType) params.append('content_type', contentType);
+    if (minDuration) params.append('min_duration', minDuration);
+    if (maxDuration) params.append('max_duration', maxDuration);
 
-    const url = `${API_URL}/search/videos?${params}`;
-    console.log('Making request to:', url); // Debug log
-
-    // Make request to the API
-    const response = await fetch(url, {
+    const response = await fetch(`${API_URL}/search/videos?${params}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       }
     });
 
-    console.log('Response status:', response.status); // Debug log
-
     if (!response.ok) {
       const errorData = await response.json();
-      console.error(`YouTube search error: ${errorData.error || 'Unknown error'}`);
-      // Return a minimal fallback result with the search URL
-      return {
-        query,
-        results: [{
-          id: 'fallback',
-          title: `Search results for: ${query}`,
-          url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-          channel: { name: 'YouTube Search' },
-          fallback: true,
-          duration: isOneShot ? '90:00' : '30:00', // Provide a default duration
-          // Add these properties for duration estimation
-          title: query.includes('complete course') || query.includes('full course') ? 
-                `Complete Course: ${query}` : `Tutorial: ${query}`,
-          duration_seconds: isOneShot ? 5400 : 1800
-        }],
-        result_count: 1
-      };
+      throw new Error(errorData.message || 'Error searching YouTube');
     }
 
     const data = await response.json();
+    let videos = data.items || data.results || [];
     
-    // Check if we received results - if not, create default fallback
-    if (!data.results || data.results.length === 0) {
-      console.log('No YouTube results returned, creating fallback');
-      return {
-        query,
-        results: [{
-          id: 'fallback',
-          title: `Search results for: ${query}`,
-          url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-          channel: { name: 'YouTube Search' },
-          fallback: true,
-          duration: isOneShot ? '90:00' : '30:00', // Provide a default duration
-          // Add these properties for duration estimation
-          title: query.includes('complete course') || query.includes('full course') ? 
-                `Complete Course: ${query}` : `Tutorial: ${query}`,
-          duration_seconds: isOneShot ? 5400 : 1800
-        }],
-        result_count: 1
-      };
+    console.log(`Found ${videos.length} videos for query: "${query}"`);
+    
+    // If we need to filter by technology relevance
+    if (filterTechnology) {
+      console.log(`Filtering videos by relevance to: ${filterTechnology}`);
+      
+      // Prepare videos with technology information
+      videos = videos.map(video => ({
+        ...video,
+        topicRelevanceTerm: filterTechnology
+      }));
+      
+      // Use batch processing if enabled
+      if (useBatchRelevance && videos.length > 1) {
+        console.log(`Using batch relevance checking for ${videos.length} videos`);
+        videos = await processBatchVideoRelevance(videos, filterTechnology);
+      } 
+      // Otherwise process individually
+      else {
+        console.log('Using individual relevance checking');
+        for (const video of videos) {
+          let isRelevant = false;
+          
+          // Check relevance based on the selected method
+          if (useGroqRelevance) {
+            isRelevant = await checkRelevanceWithGroq(video.title, filterTechnology);
+          } else if (useEmbeddings) {
+            isRelevant = await checkRelevanceWithEmbeddings(video.title, filterTechnology);
+          } else {
+            isRelevant = defaultRelevanceCheck(video.title, filterTechnology);
+          }
+          
+          video.isRelevant = isRelevant;
+        }
+      }
+      
+      // Filter out non-relevant videos
+      const relevantVideos = videos.filter(video => video.isRelevant);
+      console.log(`Filtered to ${relevantVideos.length} relevant videos for ${filterTechnology}`);
+      
+      // If we have enough relevant videos, return only those
+      if (relevantVideos.length >= Math.min(5, limit)) {
+        return relevantVideos;
+      }
+      
+      // Otherwise, include some non-relevant videos but mark them
+      console.log('Not enough relevant videos, including some non-relevant ones');
+      return videos;
     }
     
-    return data;
+    return videos;
   } catch (error) {
     console.error('Error searching YouTube:', error);
-    // Return a fallback result on any error
-    return {
-      query,
-      results: [{
-        id: 'fallback',
-        title: `Search results for: ${query}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-        channel: { name: 'YouTube Search' },
-        fallback: true,
-        duration: '30:00', // Provide a default duration
-        // Add these properties for duration estimation
-        title: query.includes('complete course') || query.includes('full course') ? 
-              `Complete Course: ${query}` : `Tutorial: ${query}`,
-        duration_seconds: query.includes('complete course') || query.includes('full course') ? 5400 : 1800
-      }],
-      result_count: 1,
-      error: error.message
-    };
+    return [];
   }
 };
 
@@ -497,8 +533,8 @@ export const searchPlaylists = async (query, limit = 10) => {
  * @param {boolean} useGroqRelevance - Whether to use Groq for relevance checking
  * @returns {number|Promise<number>} - Rating from 0-6 or a Promise resolving to a rating
  */
-const rateVideo = async (video, useGroqRelevance = false) => {
-  if (!video || video.fallback) return 0;
+const rateVideo = async (video) => {
+  if (!video) return 0;
   
   let score = 0;
   const currentYear = new Date().getFullYear();
@@ -633,28 +669,7 @@ const rateVideo = async (video, useGroqRelevance = false) => {
     }
   }
   
-  // Step 1: Title Relevance Check (Critical filter)
-  // Check if the video title contains the actual technology name
-  if (video.topicRelevanceTerm && video.title) {
-    let isRelevant = false;
-    
-    if (useGroqRelevance) {
-      // Use Groq LLM for relevance checking
-      isRelevant = await checkRelevanceWithGroq(video.title, video.topicRelevanceTerm);
-    } else {
-      // Use the default relevance checking method
-      isRelevant = defaultRelevanceCheck(video.title, video.topicRelevanceTerm);
-    }
-    
-    if (!isRelevant) {
-      console.log(`Rejecting video due to missing tech name in title: "${video.title}" should contain "${video.topicRelevanceTerm}"`);
-      return 0;
-    }
-    
-    console.log(`Video title passed ${useGroqRelevance ? 'Groq' : 'default'} relevance check for "${video.topicRelevanceTerm}"`);
-  }
-  
-  // Step 2: Duration Check (Critical filter)
+  // Step 1: Duration Check (Critical filter)
   const isLikelyOneshot = video.title?.toLowerCase().includes('oneshot') || 
                         video.title?.toLowerCase().includes('one shot') ||
                         video.title?.toLowerCase().includes('complete course') ||
@@ -687,7 +702,7 @@ const rateVideo = async (video, useGroqRelevance = false) => {
     score += oneshotBonus;
   }
   
-  // Step 3: Engagement & Popularity Score (Out of 6 points total)
+  // Step 2: Engagement & Popularity Score (Out of 6 points total)
   
   // A. Views (Max 3 Points)
   if (views >= 500000) {
@@ -1034,33 +1049,6 @@ const ratePlaylist = async (playlist) => {
  * @param {string} techName - The technology name to check against
  * @returns {boolean|Promise<boolean>} - Whether the playlist title is relevant
  */
-const checkPlaylistTitleRelevance = async (playlistTitle, techName, useGroq = false) => {
-  if (!playlistTitle || !techName) return false;
-  
-  // If Groq relevance checking is enabled, use it
-  if (useGroq && ENABLE_GROQ_RELEVANCE) {
-    console.log(`Using Groq to check playlist relevance: "${playlistTitle}" for "${techName}"`);
-    return await checkRelevanceWithGroq(playlistTitle, techName);
-  }
-  
-  // Otherwise fall back to basic pattern matching
-  const titleLower = playlistTitle.toLowerCase();
-  const techLower = techName.toLowerCase();
-  
-  // Basic relevance check with common variations
-  const isRelevant = titleLower.includes(techLower) || 
-    // Node.js variations
-    (techLower === 'node.js' && (titleLower.includes('nodejs') || titleLower.includes('node js'))) ||
-    // Javascript variations
-    (techLower === 'javascript' && titleLower.includes('js')) ||
-    // Python variations
-    (techLower === 'python' && titleLower.includes('py')) ||
-    // Machine learning variations
-    (techLower === 'machine learning' && titleLower.includes('ml'));
-  
-  console.log(`Basic relevance check for playlist: "${playlistTitle}" to "${techName}" - ${isRelevant ? 'PASSED' : 'FAILED'}`);
-  return isRelevant;
-};
 
 /**
  * Find the best educational playlist for a specific topic using the API endpoint
@@ -1097,7 +1085,7 @@ export const findBestPlaylist = async (topic, debug = false) => {
     const result = await response.json();
     
     // Check if no suitable playlist was found
-    if (result.status === "no_suitable_playlist") {
+    if (!result || result.status === "no_suitable_playlist" || !result.playlist) {
       console.log("No suitable playlist found for:", searchQuery);
       return null;
     }
@@ -1108,153 +1096,6 @@ export const findBestPlaylist = async (topic, debug = false) => {
     console.error('Error finding best playlist:', error);
     return null;
   }
-};
-
-/**
- * Extract technologies from a title using Groq
- * @param {string} title - The title to analyze
- * @param {Array<string>} roadmapTopics - List of topics from the roadmap
- * @returns {Promise<Array<string>>} - List of matching technologies
- */
-const extractTechnologiesFromTitle = async (title, roadmapTopics) => {
-  let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
-  
-  while (retryCount < GROQ_MAX_RETRIES) {
-    try {
-      console.log(`Extracting technologies from title: "${title}" (Attempt ${retryCount + 1}/${GROQ_MAX_RETRIES})`);
-      
-      const response = await fetch(GROQ_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${currentKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama3-70b-8192',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a technology content analyzer. Your task is to identify technologies mentioned in a title that match a given list of topics.
-
-              Rules:
-              1. Only identify technologies that exactly match or are common variations of the provided topics
-              2. Consider common abbreviations (JS for JavaScript, k8s for Kubernetes)
-              3. Ignore generic terms like "tutorial", "course", "complete", etc.
-              4. Be strict - only match technologies that are clearly mentioned
-              
-              Respond with a JSON object containing:
-              {
-                "matchingTechnologies": ["array", "of", "matching", "technologies"],
-                "confidence": number (0-1)
-              }
-
-              IMPORTANT: Return ONLY the JSON object, no markdown formatting or additional text.`
-            },
-            {
-              role: 'user',
-              content: `Title: "${title}"
-              Available Topics: ${JSON.stringify(roadmapTopics)}`
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 150,
-          response_format: { type: "json_object" }
-        })
-      });
-
-      if (response.status === 429) {
-        retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-          continue;
-        } else {
-          console.log('Max retries reached for Groq API. Using fallback technology extraction.');
-          return fallbackExtractTechnologies(title, roadmapTopics);
-        }
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`Groq API error (${response.status}):`, errorData);
-        throw new Error(`Failed to extract technologies: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-      
-      try {
-        const result = JSON.parse(cleanContent);
-        console.log(`Extracted technologies: ${result.matchingTechnologies.join(', ')} (confidence: ${result.confidence})`);
-        return result.matchingTechnologies;
-      } catch (parseError) {
-        console.error('Failed to parse Groq result:', parseError);
-        return fallbackExtractTechnologies(title, roadmapTopics);
-      }
-    } catch (error) {
-      console.error('Error extracting technologies:', error);
-      if (retryCount < GROQ_MAX_RETRIES - 1) {
-        retryCount++;
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-        continue;
-      }
-      return fallbackExtractTechnologies(title, roadmapTopics);
-    }
-  }
-  
-  return fallbackExtractTechnologies(title, roadmapTopics);
-};
-
-/**
- * Fallback method to extract technologies from title using basic pattern matching
- * @param {string} title - The title to analyze
- * @param {Array<string>} roadmapTopics - List of topics from the roadmap
- * @returns {Array<string>} - List of matching technologies
- */
-const fallbackExtractTechnologies = (title, roadmapTopics) => {
-  const titleLower = title.toLowerCase();
-  const matchingTechnologies = [];
-  
-  // Common technology variations mapping
-  const techVariations = {
-    'javascript': ['js', 'javascript'],
-    'node.js': ['nodejs', 'node js', 'node'],
-    'express.js': ['expressjs', 'express js', 'express'],
-    'mongodb': ['mongo', 'mongo db'],
-    'react.js': ['reactjs', 'react js', 'react'],
-    'typescript': ['ts', 'typescript'],
-    'python': ['py', 'python'],
-    'django': ['django'],
-    'flask': ['flask'],
-    'postgresql': ['postgres', 'postgresql', 'postgres db'],
-    'mysql': ['mysql', 'my sql'],
-    'redis': ['redis'],
-    'docker': ['docker'],
-    'kubernetes': ['k8s', 'kubernetes'],
-    'aws': ['amazon web services', 'aws'],
-    'azure': ['microsoft azure', 'azure'],
-    'gcp': ['google cloud', 'google cloud platform', 'gcp']
-  };
-  
-  // Check each topic and its variations
-  for (const topic of roadmapTopics) {
-    const topicLower = topic.toLowerCase();
-    const variations = techVariations[topicLower] || [topicLower];
-    
-    for (const variation of variations) {
-      if (titleLower.includes(variation)) {
-        matchingTechnologies.push(topic);
-        break;
-      }
-    }
-  }
-  
-  console.log(`Fallback extracted technologies: ${matchingTechnologies.join(', ')}`);
-  return matchingTechnologies;
 };
 
 /**
@@ -1342,6 +1183,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           fromCache: true,
           cachedAt: resource.createdAt,
           expiresAt: resource.expiresAt,
+          technologies: resource.metadata.technologies || [],
           // Add thumbnail if it's a single video
           ...(resource.type === 'video' && processedVideos.length > 0 ? {
             thumbnail: processedVideos[0].thumbnail,
@@ -1368,21 +1210,6 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
     const normalizedTopic = normalizeSearchTerm(topic);
     console.log(`Original topic: "${topic}" → Normalized: "${normalizedTopic}"`);
     
-    // Extract just the technology name for relevance checking
-    const techName = normalizedTopic
-      .replace(/complete\s+/gi, '')
-      .replace(/full\s+/gi, '')
-      .replace(/tutorial\s*/gi, '')
-      .replace(/course\s*/gi, '')
-      .replace(/for beginners\s*/gi, '')
-      .replace(/oneshot\s*/gi, '')
-      .replace(/one shot\s*/gi, '')
-      .replace(/masterclass\s*/gi, '')
-      .replace(/crash course\s*/gi, '')
-      .trim();
-    
-    console.log(`Technology name for relevance checking: "${techName}"`);
-    
     // First try to find a suitable playlist using the new API endpoint
     console.log(`Searching for best ${normalizedTopic} playlist using API...`);
     const bestPlaylistResult = await findBestPlaylist(normalizedTopic, false);
@@ -1392,7 +1219,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
     let bestPlaylist = null;
     
     // Check if we found a playlist and if it meets minimum quality threshold (score ≥ 6.0)
-    if (bestPlaylistResult && bestPlaylistResult.score >= 6.0) {
+    if (bestPlaylistResult && bestPlaylistResult.playlist && bestPlaylistResult.score >= 6.0) {
       playlistScore = bestPlaylistResult.score;
       console.log(`Found playlist: ${bestPlaylistResult.playlist.title} (Score: ${playlistScore}/10)`);
       
@@ -1427,21 +1254,17 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         isPlaylist: true,
         quality: bestPlaylistResult.score >= 8.0 ? 'Exceptional' : 
                 bestPlaylistResult.score >= 7.0 ? 'Good' : 'Average',
-        videos: bestPlaylistResult.playlist.videos || []
+        videos: bestPlaylistResult.playlist.videos || [],
+        technologies: bestPlaylistResult.technologies || []
       };
 
-      // If the playlist is exceptional (≥8.0), extract technologies and return it immediately
+      // If the playlist is exceptional (≥8.0), return it immediately
       if (playlistScore >= 8.0) {
-        console.log(`Found EXCEPTIONAL playlist (${playlistScore}/10), extracting technologies...`);
-        const matchingTechnologies = await extractTechnologiesFromTitle(
-          bestPlaylistResult.playlist.title,
-          roadmapTopics
-        );
-        bestPlaylist.matchingTechnologies = matchingTechnologies.length > 1 ? matchingTechnologies : undefined;
+        console.log(`Found EXCEPTIONAL playlist (${playlistScore}/10), using technologies from relevance check`);
         
         // If this playlist covers multiple topics, add it to shared resources
-        if (matchingTechnologies.length > 1) {
-          await addSharedResource(bestPlaylist, matchingTechnologies);
+        if (bestPlaylist.technologies && bestPlaylist.technologies.length > 1) {
+          await addSharedResource(bestPlaylist, bestPlaylist.technologies);
         }
         
         // Cache the resource
@@ -1455,7 +1278,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         return bestPlaylist;
       }
     } else {
-      console.log(`No suitable playlist found or score below threshold`);
+      console.log(`No suitable playlist found or score below threshold for "${normalizedTopic}"`);
     }
     
     // Only search for videos if we don't have an exceptional playlist
@@ -1464,35 +1287,106 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         // Search for single videos as well
         console.log(`Searching for individual videos on: ${normalizedTopic}`);
         
+        // Extract just the technology name for search query and relevance checking
+        const techName = normalizedTopic
+          .replace(/complete\s+/gi, '')
+          .replace(/full\s+/gi, '')
+          .replace(/tutorial\s*/gi, '')
+          .replace(/course\s*/gi, '')
+          .replace(/for beginners\s*/gi, '')
+          .replace(/oneshot\s*/gi, '')
+          .replace(/one shot\s*/gi, '')
+          .replace(/masterclass\s*/gi, '')
+          .replace(/crash course\s*/gi, '')
+          .trim();
+        
+        console.log(`Technology name for search and relevance checking: "${techName}"`);
+        
         // Format the search query with the requested pattern
         const hasCompleteKeyword = normalizedTopic.toLowerCase().includes('complete');
         const minDuration = 40;
         
-        const searchConfig = {
-          query: hasCompleteKeyword ? 
+        // Create multiple search patterns with different queries
+        const searchPatterns = [
+          // First try the original pattern
+          hasCompleteKeyword ? 
             `${normalizedTopic} course full oneshot` : 
-            `Complete ${normalizedTopic} course full oneshot`,
-          isOneShot: true, 
-          minDuration: minDuration,
-          relevanceTerm: techName
-        };
+            `Complete ${techName} course full oneshot`,
+          // Don't try additional patterns (commented out)
+          /*
+          `${techName} tutorial for beginners`,
+          `${techName} crash course`,
+          `learn ${techName}`,
+          `${techName} full tutorial`,
+          // Finally try generic search with just the tech name
+          techName
+          */
+        ];
         
-        console.log(`Trying search: "${searchConfig.query}"`);
+        // Try each search pattern until we find videos
+        let searchResult = null;
+        for (const pattern of searchPatterns) {
+          console.log(`Trying search: "${pattern}"`);
+          
+          const result = await searchYouTube(
+            pattern, 
+            10, // Reduced from 15 to 10
+            { minDuration: minDuration }
+          );
+          
+          // Handle both direct array returns and nested result objects
+          const videos = Array.isArray(result) ? result : (result?.results || result?.items || []);
+          
+          if (videos.length > 0) {
+            console.log(`Found ${videos.length} videos with pattern "${pattern}"`);
+            searchResult = { results: videos };
+            break;
+          } else {
+            console.log(`No results found for pattern "${pattern}", trying next...`);
+            // Early termination - don't try additional patterns
+            console.log(`No videos found for ${normalizedTopic} - early termination without further API calls`);
+            break;
+          }
+        }
         
-        const searchResult = await searchYouTube(
-          searchConfig.query, 
-          15, 
-          { isOneShot: searchConfig.isOneShot, minDuration: searchConfig.minDuration }
-        );
-        
-        // Rate all videos and find the best match
+        // Process videos and run batch relevance check
         if (searchResult?.results?.length > 0) {
           try {
-            console.log(`Found ${searchResult.results.length} videos, fetching details in parallel...`);
+            console.log(`Found ${searchResult.results.length} videos, running batch relevance check...`);
             
+            // Extract titles for batch relevance check
+            const videoTitles = searchResult.results.map(video => video.title);
+            
+            // Run batch relevance check using the same technology name as search
+            const batchResults = await checkBatchRelevanceWithEmbeddings(videoTitles, techName);
+            
+            // Create a map of titles to relevance results
+            const titleToRelevanceMap = {};
+            batchResults.forEach(result => {
+              titleToRelevanceMap[result.title] = result;
+            });
+            
+            // Filter videos based on relevance results
+            const relevantVideos = searchResult.results.filter(video => {
+              const relevanceResult = titleToRelevanceMap[video.title];
+              if (!relevanceResult) return false;
+              
+              // Add relevance data and technologies to video
+              video.isRelevant = relevanceResult.isRelevant;
+              video.relevanceSimilarity = relevanceResult.similarity;
+              video.relevanceExplanation = relevanceResult.explanation;
+              video.technologies = relevanceResult.technologies || [];
+              
+              return relevanceResult.isRelevant;
+            });
+            
+            console.log(`After relevance filtering: ${relevantVideos.length} relevant videos out of ${searchResult.results.length}`);
+            
+            // If we have relevant videos, fetch details for them
+            if (relevantVideos.length > 0) {
             // Maximum number of concurrent requests to avoid overwhelming the API
             const MAX_CONCURRENT_REQUESTS = 5;
-            const videosToProcess = [...searchResult.results];
+              const videosToProcess = [...relevantVideos];
             const processedVideos = [];
             
             // Process videos in batches for parallel fetching
@@ -1503,9 +1397,6 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
               // Create promises for each video in the current batch
               const batchPromises = currentBatch.map(async (video) => {
               try {
-                // Skip if it's a fallback video
-                if (video.fallback) return video;
-
                 // Fetch video details including duration
                   console.log(`Fetching details for: ${video.title}`);
                 const details = await getVideoDetails(video.url);
@@ -1543,11 +1434,8 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
 
             // Rate the videos with complete information
             const ratingPromises = processedVideos.map(async (video) => {
-              // Add topic relevance term for title matching
-              video.topicRelevanceTerm = searchConfig.relevanceTerm;
-              
               // Rate the video (using the existing rateVideo function)
-              const rating = await rateVideo(video, false);
+                const rating = await rateVideo(video);
               video.rating = rating;
               
               // Get duration in minutes from the fetched details
@@ -1578,43 +1466,23 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
             // Find the highest rated video
             for (const { video, rating, durationMinutes } of ratingResults) {
               if (rating > 0) { // Only consider videos that passed the filters
-                console.log(`${searchConfig.isOneShot ? 'OneShot' : 'Regular'} - ${video.title} - Rating: ${rating.toFixed(1)}/6 - Duration: ${durationMinutes} minutes`);
+                  console.log(`${video.title} - Rating: ${rating.toFixed(1)}/6 - Duration: ${durationMinutes} minutes - Technologies: ${video.technologies.join(', ')}`);
               
                 // Select the video with the highest rating
                 if (rating > highestRating || (rating === highestRating && durationMinutes > highestDuration)) {
                   highestRating = rating;
                   highestDuration = durationMinutes;
                   highestRatedVideo = video;
+                  }
                 }
               }
             }
           } catch (error) {
             console.error('Error processing video details:', error);
-            // Continue with the original search results if there's an error
-            for (const video of searchResult.results) {
-              // Add topic relevance term for title matching
-              video.topicRelevanceTerm = searchConfig.relevanceTerm;
-              
-              // Rate the video (using the existing rateVideo function)
-              const rating = await rateVideo(video, false);
-              video.rating = rating;
-              
-              if (rating > 0) {
-                console.log(`Fallback rating for ${video.title} - Rating: ${rating.toFixed(1)}/6`);
-                if (rating > highestRating) {
-                  highestRating = rating;
-                  highestRatedVideo = video;
-                }
-              }
-            }
           }
         }
       } catch (error) {
-        console.error('Error searching for videos:', error);
-        // Continue with playlist if available
-        if (bestPlaylist) {
-          return bestPlaylist;
-        }
+        console.error('Error searching for individual videos:', error);
       }
     }
     
@@ -1626,18 +1494,13 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       highestRatedVideo.videoRating = highestRating.toFixed(1);
       highestRatedVideo.durationMinutes = highestDuration;
       
-      // If the video is excellent (≥4.5), extract technologies and return it immediately
+      // If the video is excellent (≥4.5), return it immediately with its technologies
       if (highestRating >= 4.5) {
-        console.log(`Found excellent video (${highestRating}/6), extracting technologies...`);
-        const matchingTechnologies = await extractTechnologiesFromTitle(
-          highestRatedVideo.title,
-          roadmapTopics
-        );
-        highestRatedVideo.matchingTechnologies = matchingTechnologies.length > 1 ? matchingTechnologies : undefined;
+        console.log(`Found excellent video (${highestRating}/6), with technologies from relevance check: ${highestRatedVideo.technologies?.join(', ') || 'none'}`);
         
         // If this video covers multiple topics, add it to shared resources
-        if (matchingTechnologies.length > 1) {
-          await addSharedResource(highestRatedVideo, matchingTechnologies);
+        if (highestRatedVideo.technologies && highestRatedVideo.technologies.length > 1) {
+          await addSharedResource(highestRatedVideo, highestRatedVideo.technologies);
         }
         
         // Cache the resource
@@ -1658,66 +1521,44 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         const normalizedVideoScore = (highestRating / 6) * 10;
         console.log(`Comparing: Video (normalized ${normalizedVideoScore.toFixed(1)}/10) vs Playlist (${playlistScore}/10)`);
         
-        // Extract technologies from the better resource
         if (normalizedVideoScore > playlistScore) {
-          console.log(`Video is better (${normalizedVideoScore.toFixed(1)} > ${playlistScore}), extracting technologies...`);
-          const matchingTechnologies = await extractTechnologiesFromTitle(
-            highestRatedVideo.title,
-            roadmapTopics
-          );
-          highestRatedVideo.matchingTechnologies = matchingTechnologies.length > 1 ? matchingTechnologies : undefined;
+          console.log(`Video is better (${normalizedVideoScore.toFixed(1)} > ${playlistScore})`);
           
           // If this video covers multiple topics, add it to shared resources
-          if (matchingTechnologies.length > 1) {
-            await addSharedResource(highestRatedVideo, matchingTechnologies);
+          if (highestRatedVideo.technologies && highestRatedVideo.technologies.length > 1) {
+            await addSharedResource(highestRatedVideo, highestRatedVideo.technologies);
           }
           
           // Cache the resource
           try {
             await cacheResource(highestRatedVideo, topic);
-            console.log(`Cached video for "${topic}"`);
+            console.log(`Cached preferred video for "${topic}"`);
           } catch (cacheError) {
             console.error('Error caching video:', cacheError);
           }
           
           return highestRatedVideo;
         } else {
-          console.log(`Playlist is better (${playlistScore} > ${normalizedVideoScore.toFixed(1)}), extracting technologies...`);
-          const matchingTechnologies = await extractTechnologiesFromTitle(
-            bestPlaylist.title,
-            roadmapTopics
-          );
-          bestPlaylist.matchingTechnologies = matchingTechnologies.length > 1 ? matchingTechnologies : undefined;
+          console.log(`Playlist is better (${playlistScore} > ${normalizedVideoScore.toFixed(1)})`);
           
           // If this playlist covers multiple topics, add it to shared resources
-          if (matchingTechnologies.length > 1) {
-            await addSharedResource(bestPlaylist, matchingTechnologies);
+          if (bestPlaylist.technologies && bestPlaylist.technologies.length > 1) {
+            await addSharedResource(bestPlaylist, bestPlaylist.technologies);
           }
           
           // Cache the resource
           try {
             await cacheResource(bestPlaylist, topic);
-            console.log(`Cached playlist for "${topic}"`);
+            console.log(`Cached preferred playlist for "${topic}"`);
           } catch (cacheError) {
             console.error('Error caching playlist:', cacheError);
           }
           
           return bestPlaylist;
         }
-      }
-      
-      // If only video is found and meets minimum threshold, extract technologies and return it
-      console.log('Only video found, extracting technologies...');
-      const matchingTechnologies = await extractTechnologiesFromTitle(
-        highestRatedVideo.title,
-        roadmapTopics
-      );
-      highestRatedVideo.matchingTechnologies = matchingTechnologies.length > 1 ? matchingTechnologies : undefined;
-      
-      // If this video covers multiple topics, add it to shared resources
-      if (matchingTechnologies.length > 1) {
-        await addSharedResource(highestRatedVideo, matchingTechnologies);
-      }
+      } else {
+        // Only the video was found
+        console.log(`Using video (no playlist available)`);
       
       // Cache the resource
       try {
@@ -1728,21 +1569,12 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       }
       
       return highestRatedVideo;
+      }
     }
     
-    // If only playlist is found and meets minimum threshold, extract technologies and return it
+    // If a playlist was found but no good video, use the playlist
     if (bestPlaylist) {
-      console.log('Only playlist found, extracting technologies...');
-      const matchingTechnologies = await extractTechnologiesFromTitle(
-        bestPlaylist.title,
-        roadmapTopics
-      );
-      bestPlaylist.matchingTechnologies = matchingTechnologies.length > 1 ? matchingTechnologies : undefined;
-      
-      // If this playlist covers multiple topics, add it to shared resources
-      if (matchingTechnologies.length > 1) {
-        await addSharedResource(bestPlaylist, matchingTechnologies);
-      }
+      console.log(`Using playlist (no suitable video found)`);
       
       // Cache the resource
       try {
@@ -1755,55 +1587,52 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       return bestPlaylist;
     }
     
-    // If neither video nor playlist meets minimum thresholds, return a search link
-    console.log('No suitable video or playlist found, returning search link');
-    return {
-      title: `Find tutorials for: ${normalizedTopic}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(normalizedTopic + ' tutorial')}`,
-      channel: { name: 'YouTube Search' },
-      views_formatted: 'N/A',
-      likes_formatted: 'N/A',
-      fallback: true,
-      videoRating: '0.0'
-    };
+    // No suitable resources found
+    console.log(`No suitable resource found for "${topic}"`);
+    return null;
   } catch (error) {
-    console.error(`Error finding best video for topic "${topic}":`, error);
-    
-    // Return a fallback search URL on error
-    return {
-      title: `YouTube tutorial for: ${topic}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(topic + ' tutorial')}`,
-      channel: { name: 'YouTube Search' },
-      views_formatted: 'N/A',
-      likes_formatted: 'N/A',
-      fallback: true,
-      videoRating: '0.0'
-    };
+    console.error('Error in findBestVideoForTopic:', error);
+    return null;
   }
-};
+}
 
 /**
- * Use Groq LLM to check if a video title is relevant to a technology topic
+ * Use OpenRouter LLM to check if a video title is relevant to a technology topic
  * @param {string} videoTitle - The title of the video to check
  * @param {string} techName - The technology name to match against
  * @returns {Promise<boolean>} - Whether the video is relevant to the technology
  */
 const checkRelevanceWithGroq = async (videoTitle, techName) => {
   let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
+  let currentKey = OPENROUTER_API_KEYS[openRouterKeyIndex];
+  let backoffDelay = API_RATE_LIMIT_DELAY;
   
-  while (retryCount < GROQ_MAX_RETRIES) {
+  while (retryCount < API_MAX_RETRIES) {
     try {
-      console.log(`Checking relevance with Groq: "${videoTitle}" for "${techName}" (Attempt ${retryCount + 1}/${GROQ_MAX_RETRIES})`);
+      console.log(`Checking relevance: "${videoTitle}" for "${techName}" (Attempt ${retryCount + 1}/${API_MAX_RETRIES})`);
     
-      const response = await fetch(GROQ_API_URL, {
+      // Check if we're rate limited
+      if (isRateLimited('openrouter')) {
+        console.log(`Rate limit reached for OpenRouter API. Waiting ${backoffDelay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        currentKey = getNextOpenRouterApiKey();
+        backoffDelay *= 2; // Exponential backoff
+        continue;
+      }
+      
+      // Record this API call
+      recordApiCall('openrouter');
+    
+      const response = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${currentKey}`,
           'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'MuftCode Learning Platform'
         },
         body: JSON.stringify({
-          model: 'llama3-70b-8192',
+          model: 'meta-llama/llama-3.3-70b-instruct',
           messages: [
             {
               role: 'system',
@@ -1821,9 +1650,7 @@ const checkRelevanceWithGroq = async (videoTitle, techName) => {
                 "isRelevant": boolean,
                 "explanation": "brief explanation of your decision",
                 "confidence": number (0-1)
-              }
-
-              IMPORTANT: Return ONLY the JSON object, no markdown formatting or additional text.`
+              }`
             },
             {
               role: 'user',
@@ -1832,28 +1659,30 @@ const checkRelevanceWithGroq = async (videoTitle, techName) => {
             }
           ],
           temperature: 0.1,
-          max_tokens: 150,
-          response_format: { type: "json_object" }
+          max_tokens: 150
         })
       });
 
-      if (response.status === 429) { // Rate limit
+      if (!response.ok) {
+        const status = response.status;
+        const errorData = await response.json().catch(() => ({}));
+        
+        if (status === 429) { // Rate limit
         retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
+          if (retryCount < API_MAX_RETRIES) {
+            console.log(`API rate limit reached. Rotating API key and retrying with backoff (${backoffDelay}ms)...`);
+            currentKey = getNextOpenRouterApiKey();
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            backoffDelay *= 2; // Exponential backoff
           continue;
         } else {
-          console.log('Max retries reached for Groq API. Using fallback evaluation.');
+            console.log('Max retries reached for API. Using fallback evaluation.');
           return defaultRelevanceCheck(videoTitle, techName);
         }
       }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`Groq API error (${response.status}):`, errorData);
-        throw new Error(`Failed to check relevance with Groq: ${response.status} ${response.statusText}`);
+        console.error(`API error (${status}):`, errorData);
+        throw new Error(`Failed to check relevance: ${status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -1864,22 +1693,26 @@ const checkRelevanceWithGroq = async (videoTitle, techName) => {
       
       try {
         const result = JSON.parse(cleanContent);
-        console.log(`Groq relevance result: ${result.isRelevant ? 'RELEVANT' : 'NOT RELEVANT'} (confidence: ${result.confidence})`);
+        console.log(`Relevance result: ${result.isRelevant ? 'RELEVANT' : 'NOT RELEVANT'} (confidence: ${result.confidence})`);
         console.log(`Explanation: ${result.explanation}`);
         return result.isRelevant;
       } catch (parseError) {
-        console.error('Failed to parse Groq relevance result:', parseError);
+        console.error('Failed to parse relevance result:', parseError);
         console.log('Raw content:', content);
         return defaultRelevanceCheck(videoTitle, techName);
       }
     } catch (error) {
-      console.error('Error checking relevance with Groq:', error);
-      if (retryCount < GROQ_MAX_RETRIES - 1) {
+      console.error('Error checking relevance:', error);
         retryCount++;
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
+      
+      if (retryCount < API_MAX_RETRIES) {
+        console.log(`Error occurred. Rotating API key and retrying with backoff (${backoffDelay}ms)...`);
+        currentKey = getNextOpenRouterApiKey();
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        backoffDelay *= 2; // Exponential backoff
         continue;
       }
+      
       return defaultRelevanceCheck(videoTitle, techName);
     }
   }
@@ -1921,4 +1754,173 @@ export const clearSharedResources = () => {
   sharedResourcesMap.clear();
   sharedResourceTopics.clear();
   console.log('Cleared shared resources tracking');
+}; 
+
+/**
+ * Check if a video title is relevant to a technology topic using sentence embeddings and semantic similarity
+ * @param {string} videoTitle - The title of the video to check
+ * @param {string} techName - The technology name to match against
+ * @returns {Promise<boolean>} - Whether the video is relevant to the technology
+ */
+const checkRelevanceWithEmbeddings = async (videoTitle, techName) => {
+  try {
+    console.log(`Checking relevance with embeddings: "${videoTitle}" for "${techName}"`);
+    
+    // Call the embedding similarity API endpoint
+    const response = await fetch(`${API_URL}/check-relevance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: videoTitle,
+        technology: techName
+      })
+    });
+    
+    if (!response.ok) {
+      console.error(`API error (${response.status}): ${response.statusText}`);
+      return defaultRelevanceCheck(videoTitle, techName);
+    }
+    
+    const result = await response.json();
+    console.log(`Embedding similarity result: ${result.isRelevant ? 'RELEVANT' : 'NOT RELEVANT'} (similarity: ${result.similarity.toFixed(3)})`);
+    console.log(`Explanation: ${result.explanation}`);
+    
+    return result.isRelevant;
+  } catch (error) {
+    console.error('Error checking relevance with embeddings:', error);
+    return defaultRelevanceCheck(videoTitle, techName);
+  }
+};
+
+/**
+ * Check multiple video titles for relevance to a technology using batch processing
+ * @param {Array<string>} videoTitles - Array of video titles to check
+ * @param {string} techName - The technology name to match against
+ * @returns {Promise<Array<{title: string, isRelevant: boolean, similarity: number, explanation: string}>>} - Results for each title
+ */
+const checkBatchRelevanceWithEmbeddings = async (videoTitles, techName) => {
+  try {
+    console.log(`Checking batch relevance for ${videoTitles.length} titles for "${techName}"`);
+    
+    // Call the batch relevance API endpoint
+    const response = await fetch(`${API_URL}/check-batch-relevance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        titles: videoTitles,
+        technology: techName
+      })
+    });
+    
+    if (!response.ok) {
+      console.error(`API error (${response.status}): ${response.statusText}`);
+      // Fall back to checking each title individually with the default method
+      return videoTitles.map(title => ({
+        title,
+        isRelevant: defaultRelevanceCheck(title, techName),
+        similarity: 0.5,
+        explanation: "Fallback method used due to API error"
+      }));
+    }
+    
+    const result = await response.json();
+    console.log(`Batch relevance check complete. Processed ${result.results.length} titles.`);
+    
+    return result.results;
+  } catch (error) {
+    console.error('Error checking batch relevance:', error);
+    // Fall back to checking each title individually with the default method
+    return videoTitles.map(title => ({
+      title,
+      isRelevant: defaultRelevanceCheck(title, techName),
+      similarity: 0.5,
+      explanation: "Fallback method used due to error"
+    }));
+  }
+};
+
+/**
+ * Process a batch of videos to check their relevance to a technology
+ * @param {Array<Object>} videos - Array of video objects to process
+ * @param {string} techName - Technology to check relevance against
+ * @returns {Promise<Array<Object>>} - Videos with relevance information added
+ */
+const processBatchVideoRelevance = async (videos, techName) => {
+  if (!videos || videos.length === 0 || !techName) {
+    return videos;
+  }
+  
+  try {
+    // Extract titles and create a map to match results back to videos
+    const titles = videos.map(video => video.title);
+    const titleToVideoMap = {};
+    videos.forEach(video => {
+      titleToVideoMap[video.title] = video;
+    });
+    
+    // Get batch relevance results
+    const batchResults = await checkBatchRelevanceWithEmbeddings(titles, techName);
+    
+    // Apply results to videos
+    batchResults.forEach(result => {
+      const video = titleToVideoMap[result.title];
+      if (video) {
+        video.isRelevant = result.isRelevant;
+        video.relevanceSimilarity = result.similarity;
+        video.relevanceExplanation = result.explanation;
+      }
+    });
+    
+    console.log(`Processed relevance for ${batchResults.length} videos in batch mode`);
+    return videos;
+  } catch (error) {
+    console.error('Error in batch video relevance processing:', error);
+    
+    // Fall back to individual processing
+    console.log('Falling back to individual relevance checks');
+    for (const video of videos) {
+      video.isRelevant = await checkRelevanceWithEmbeddings(video.title, techName);
+    }
+    
+    return videos;
+  }
+};
+
+/**
+ * Check if a playlist title is relevant to a specific technology
+ * @param {string} playlistTitle - The playlist title to check
+ * @param {string} techName - The technology name to check against
+ * @param {boolean} useEmbeddings - Whether to use embedding-based relevance checking
+ * @returns {boolean|Promise<boolean>} - Whether the playlist title is relevant
+ */
+const checkPlaylistTitleRelevance = async (playlistTitle, techName, useEmbeddings = false) => {
+  if (!playlistTitle || !techName) return false;
+  
+  // If embedding-based relevance checking is enabled, use it
+  if (useEmbeddings && ENABLE_LLM_RELEVANCE) {
+    console.log(`Using embeddings to check playlist relevance: "${playlistTitle}" for "${techName}"`);
+    return await checkRelevanceWithEmbeddings(playlistTitle, techName);
+  }
+  
+  // Otherwise fall back to basic pattern matching
+  const titleLower = playlistTitle.toLowerCase();
+  const techLower = techName.toLowerCase();
+  
+  // Basic relevance check with common variations
+  const isRelevant = titleLower.includes(techLower) || 
+    // Node.js variations
+    (techLower === 'node.js' && (titleLower.includes('nodejs') || titleLower.includes('node js'))) ||
+    // Javascript variations
+    (techLower === 'javascript' && titleLower.includes('js')) ||
+    // Python variations
+    (techLower === 'python' && titleLower.includes('py')) ||
+    // Machine learning variations
+    (techLower === 'machine learning' && titleLower.includes('ml'));
+  
+  console.log(`Basic relevance check for playlist: "${playlistTitle}" to "${techName}" - ${isRelevant ? 'PASSED' : 'FAILED'}`);
+  return isRelevant;
 }; 

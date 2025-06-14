@@ -1,33 +1,39 @@
 const Resource = require('../models/Resource');
-const fetch = require('node-fetch');
 
-const GROQ_API_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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'
-];
+// Track API call timestamps for rate limiting
+const API_CALL_TIMESTAMPS = [];
 
-let currentKeyIndex = 0;
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_RATE_LIMIT_DELAY = 5000; // 5 seconds
-const GROQ_MAX_RETRIES = 3;
-
-/**
- * Get the next available Groq API key
- * @returns {string} The next API key to use
- */
-const getNextGroqApiKey = () => {
-  currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
-  return GROQ_API_KEYS[currentKeyIndex];
+// Rate limiting configuration
+const RATE_LIMIT = {
+  requestsPerMinute: 10,
+  windowMs: 60000 // 1 minute in milliseconds
 };
 
 /**
- * Use Groq to check if two technology names are equivalent
+ * Check if we've exceeded rate limits for the API
+ * @returns {boolean} - True if rate limit exceeded, false otherwise
+ */
+const isRateLimited = () => {
+  const now = Date.now();
+  
+  // Remove timestamps older than the window
+  const recentTimestamps = API_CALL_TIMESTAMPS.filter(ts => (now - ts) < RATE_LIMIT.windowMs);
+  API_CALL_TIMESTAMPS.length = 0; // Clear the array
+  API_CALL_TIMESTAMPS.push(...recentTimestamps); // Add back recent timestamps
+  
+  // Check if we've exceeded the rate limit
+  return recentTimestamps.length >= RATE_LIMIT.requestsPerMinute;
+};
+
+/**
+ * Record an API call timestamp for rate limiting
+ */
+const recordApiCall = () => {
+  API_CALL_TIMESTAMPS.push(Date.now());
+};
+
+/**
+ * Check if two technology names are equivalent
  * @param {string} tech1 - First technology name
  * @param {string} tech2 - Second technology name
  * @returns {Promise<boolean>} - Whether the technologies are equivalent
@@ -38,95 +44,43 @@ const areTechnologiesEquivalent = async (tech1, tech2) => {
     return true;
   }
   
+  const TECH_MATCHER_API_URL = process.env.TECH_MATCHER_API_URL || 'http://localhost:8000';
   let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
+  const maxRetries = 3;
+  let backoffDelay = 1000; // Start with 1 second
   
-  while (retryCount < GROQ_MAX_RETRIES) {
+  while (retryCount < maxRetries) {
     try {
-      console.log(`Checking if technologies are equivalent: "${tech1}" and "${tech2}" (Attempt ${retryCount + 1}/${GROQ_MAX_RETRIES})`);
+      console.log(`Checking if technologies are equivalent: "${tech1}" and "${tech2}" (Attempt ${retryCount + 1}/${maxRetries})`);
       
-      const response = await fetch(GROQ_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${currentKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama3-70b-8192',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a technology name matcher. Your task is to determine if two technology names refer to the same technology.
-
-              Rules:
-              1. Consider common variations and abbreviations (e.g., "Node.js" = "NodeJS" = "Node JS")
-              2. Consider version numbers as part of the name (e.g., "React 18" = "React.js 18")
-              3. Ignore case differences
-              4. Consider framework/library relationships (e.g., "Express" = "Express.js")
-              5. Be strict about different technologies (e.g., "Node.js" ≠ "Deno")
-              
-              Respond with a JSON object containing:
-              {
-                "areEquivalent": boolean,
-                "explanation": "brief explanation of your decision",
-                "confidence": number (0-1)
-              }
-
-              IMPORTANT: Return ONLY the JSON object, no markdown formatting or additional text.`
-            },
-            {
-              role: 'user',
-              content: `Are these technologies equivalent?
-              Technology 1: "${tech1}"
-              Technology 2: "${tech2}"`
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 150,
-          response_format: { type: "json_object" }
-        })
-      });
-
-      if (response.status === 429) {
-        retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-          continue;
-        } else {
-          console.log('Max retries reached for Groq API. Using fallback technology matching.');
-          return fallbackAreTechnologiesEquivalent(tech1, tech2);
-        }
-      }
-
+      // Call the tech matcher API
+      const response = await fetch(`${TECH_MATCHER_API_URL}/match?tech1=${encodeURIComponent(tech1)}&tech2=${encodeURIComponent(tech2)}`);
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`Groq API error (${response.status}):`, errorData);
-        throw new Error(`Failed to check technology equivalence: ${response.status} ${response.statusText}`);
+        throw new Error(`API returned status: ${response.status}`);
       }
-
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
       
-      try {
-        const result = JSON.parse(cleanContent);
-        console.log(`Technology equivalence result: ${result.areEquivalent ? 'EQUIVALENT' : 'DIFFERENT'} (confidence: ${result.confidence})`);
-        console.log(`Explanation: ${result.explanation}`);
-        return result.areEquivalent;
-      } catch (parseError) {
-        console.error('Failed to parse Groq result:', parseError);
-        return fallbackAreTechnologiesEquivalent(tech1, tech2);
-      }
+      const result = await response.json();
+      
+      console.log(`Technology equivalence result: ${result.areEquivalent ? 'EQUIVALENT' : 'DIFFERENT'} (similarity: ${result.similarity.toFixed(2)})`);
+      console.log(`Explanation: ${result.explanation}`);
+      
+      return result.areEquivalent;
     } catch (error) {
       console.error('Error checking technology equivalence:', error);
-      if (retryCount < GROQ_MAX_RETRIES - 1) {
-        retryCount++;
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
+      
+      retryCount++;
+      
+      if (retryCount < maxRetries) {
+        // Apply exponential backoff
+        console.log(`API error. Retrying with backoff (${backoffDelay}ms)...`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        backoffDelay *= 2; // Exponential backoff
         continue;
       }
+      
+      // If all retries fail, use fallback method
+      console.log('Using fallback technology matching method');
       return fallbackAreTechnologiesEquivalent(tech1, tech2);
     }
   }
@@ -135,7 +89,7 @@ const areTechnologiesEquivalent = async (tech1, tech2) => {
 };
 
 /**
- * Fallback function to check if two technologies are equivalent without using Groq
+ * Fallback function to check if two technologies are equivalent
  * @param {string} tech1 - First technology name
  * @param {string} tech2 - Second technology name
  * @returns {boolean} - Whether the technologies are equivalent
@@ -184,17 +138,17 @@ exports.findResourcesForTechnology = async (req, res) => {
         expiresAt: { $gt: currentDate }
       }).sort({ 'metadata.rating': -1 });
       
-      // Use Groq for semantic matching
+      // Use semantic matching
       const matchedResources = [];
       
       for (const resource of allResources) {
         let isMatch = false;
-        
+      
         // Check shared resources
         if (resource.isShared && resource.technologies && resource.technologies.length > 0) {
           for (const tech of resource.technologies) {
             try {
-              // Use Groq to check if the technologies are equivalent
+              // Check if the technologies are equivalent
               const equivalent = await areTechnologiesEquivalent(technology, tech);
               if (equivalent) {
                 isMatch = true;
@@ -213,7 +167,7 @@ exports.findResourcesForTechnology = async (req, res) => {
         // Check individual resources
         else if (!resource.isShared && resource.technology) {
           try {
-            // Use Groq to check if the technologies are equivalent
+            // Check if the technologies are equivalent
             const equivalent = await areTechnologiesEquivalent(technology, resource.technology);
             if (equivalent) {
               isMatch = true;
@@ -292,7 +246,7 @@ exports.findResourcesForMultipleTechnologies = async (req, res) => {
         if (resource.isShared && resource.technologies && resource.technologies.length > 0) {
           for (const tech of resource.technologies) {
             try {
-              // Use Groq to check if the technologies are equivalent
+              // Check if the technologies are equivalent
               const equivalent = await areTechnologiesEquivalent(technology, tech);
               if (equivalent) {
                 isMatch = true;
@@ -311,7 +265,7 @@ exports.findResourcesForMultipleTechnologies = async (req, res) => {
         // Check individual resources
         else if (!resource.isShared && resource.technology) {
           try {
-            // Use Groq to check if the technologies are equivalent
+            // Check if the technologies are equivalent
             const equivalent = await areTechnologiesEquivalent(technology, resource.technology);
             if (equivalent) {
               isMatch = true;
@@ -676,7 +630,7 @@ exports.updateSharedResources = async (req, res) => {
           });
         }
         
-        // Check for equivalent technologies using Groq
+        // Check for equivalent technologies
         const techArray = Array.from(normalizedTechnologies);
         const uniqueTechs = new Set();
         

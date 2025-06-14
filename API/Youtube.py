@@ -1158,6 +1158,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                 # Enhanced logging for relevance check
                 print(f"Batch relevance check: {is_relevant}")
                 print(f"  Explanation: {explanation}")
+
                 if technologies:
                     print(f"  Technologies detected: {', '.join(technologies)}")
                     print(f"  IMPORTANT - Is this playlist relevant to '{query}'? {'YES' if is_relevant else 'NO'}")
@@ -1184,25 +1185,26 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                 if relevance_check and 'technologies' in relevance_check:
                     technologies = relevance_check.get('technologies', [])
                 
-                    result = {
-                        "playlist": playlist,
-                        "score": score,
-                        "original_score": score,
-                        "relevance_penalty": 0.0,
-                        "details": details,
-                        "verdict": get_verdict(score),
-                        "technologies": technologies
-                    }
+                result = {
+                    "playlist": playlist,
+                    "score": score,
+                    "original_score": score,
+                    "relevance_penalty": 0.0,
+                    "details": details,
+                    "verdict": get_verdict(score),
+                    "technologies": technologies
+                }
                     
-                    print(f"✅ Final Score: {score:.1f}/10.0")
+                print(f"✅ Final Score: {score:.1f}/10.0")
+
                 if technologies:
-                    print(f"✅ Technologies detected: {', '.join(technologies)}")
-                        
+                    print(f"✅ Technologies detected: {', '.join(technologies)}")   
                 return result
+            
             else:
                 print("❌ Score is None - playlist failed scoring criteria")
-            
                 return None
+            
         except Exception as e:
             print(f"Error evaluating playlist {playlist_id}: {e}")
             traceback.print_exc()
@@ -1364,40 +1366,40 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
             print(f"Batch relevance check failed. Falling back to basic relevance matching.")
         
             # Basic matching approach
-        query_terms = query.lower().split()
-        title_lower = title.lower()
+            query_terms = query.lower().split()
+            title_lower = title.lower()
+            
+            # Check for query terms in title (partial match)
+            matched_terms = [term for term in query_terms if term in title_lower]
+            
+            # Handle common abbreviations
+            abbrev_map = {
+                "js": "javascript",
+                "py": "python",
+                "ts": "typescript",
+                "react": "reactjs",
+                "vue": "vuejs",
+                "node": "nodejs",
+                "cpp": "c++"
+            }
         
-        # Check for query terms in title (partial match)
-        matched_terms = [term for term in query_terms if term in title_lower]
+            for abbrev, full in abbrev_map.items():
+                if abbrev in title_lower and full in query.lower():
+                    matched_terms.append(full)
+                elif full in title_lower and abbrev in query.lower():
+                    matched_terms.append(abbrev)
         
-        # Handle common abbreviations
-        abbrev_map = {
-            "js": "javascript",
-            "py": "python",
-            "ts": "typescript",
-            "react": "reactjs",
-            "vue": "vuejs",
-            "node": "nodejs",
-            "cpp": "c++"
-        }
-        
-        for abbrev, full in abbrev_map.items():
-            if abbrev in title_lower and full in query.lower():
-                matched_terms.append(full)
-            elif full in title_lower and abbrev in query.lower():
-                matched_terms.append(abbrev)
-        
-        # Video titles check (verify most videos are on topic)
-        relevant_videos = 0
-        for video in videos:
-            video_title = video.get("title", "").lower()
-            if any(term in video_title for term in query_terms):
-                relevant_videos += 1
-        
-        relevance_percentage = (relevant_videos / len(videos)) * 100 if videos else 0
-        
-        title_relevance = len(matched_terms) > 0 and relevance_percentage >= 60
-        relevance_explanation = f"Matched {len(matched_terms)} terms, {relevance_percentage:.1f}% relevant videos"
+            # Video titles check (verify most videos are on topic)
+            relevant_videos = 0
+            for video in videos:
+                video_title = video.get("title", "").lower()
+                if any(term in video_title for term in query_terms):
+                    relevant_videos += 1
+            
+            relevance_percentage = (relevant_videos / len(videos)) * 100 if videos else 0
+            
+            title_relevance = len(matched_terms) > 0 and relevance_percentage >= 60
+            relevance_explanation = f"Matched {len(matched_terms)} terms, {relevance_percentage:.1f}% relevant videos"
     
     details["title_relevance"] = title_relevance
     

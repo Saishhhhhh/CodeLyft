@@ -162,6 +162,13 @@ STRICT RELEVANCE RULES:
 2. General web development courses are NOT relevant for specific topics like CSS, JavaScript, React, etc.
 3. For a {technology} query, the playlist should be specifically about {technology}, not general web development.
 4. Be STRICT - only accept playlists that are clearly focused on {technology}.
+5. REJECT ALL social media style short-form content such as:
+   - Videos with "#shorts", "#viral", "#trending", "#fyp" hashtags
+   - Videos with multiple hashtags (3 or more)
+   - Videos labeled as "shorts" or "reels"
+   - Videos with clickbait titles
+6. REJECT content that appears to be quick demos rather than educational content
+7. Duration is important - short videos under 5 minutes are typically NOT educational unless part of a playlist
 
 RECOGNIZE COMMON TECHNOLOGY NAME VARIATIONS:
 - Recognize that "Node" and "Node.js" refer to the same technology
@@ -596,7 +603,29 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         "top 10 ", "top 5 ", "comparison", "news"
     ]
     
-    contains_negative = any(pattern in title_lower for pattern in negative_patterns)
+    # Add detection for short videos, viral content, and social media style content
+    viral_patterns = [
+        "shorts", "short video", "viral", "trending", "tiktok", "reels",
+        "#shorts", "#viral", "#trending", "#fyp", "#foryou", "#foryoupage"
+    ]
+    
+    # Check for hashtag density
+    hashtag_count = title_lower.count('#')
+    has_too_many_hashtags = hashtag_count >= 3  # More than 2 hashtags is likely social media content
+    
+    # Check for common social media content patterns
+    social_media_patterns = [
+        "like if", "comment if", "follow for", "subscribe", "don't forget to", 
+        "hit like", "smash that", "#short", "#coding", "#programmer"
+    ]
+    
+    # Combined negative patterns
+    contains_negative = (
+        any(pattern in title_lower for pattern in negative_patterns) or
+        any(pattern in title_lower for pattern in viral_patterns) or
+        any(pattern in title_lower for pattern in social_media_patterns) or
+        has_too_many_hashtags
+    )
     
     # Check for language-specific indicators
     language_indicators = [
@@ -604,7 +633,7 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         "hindi", "english", "spanish", "french", "german", "russian"
     ]
     
-    contains_language = any(indicator in title_lower for term in language_indicators)
+    contains_language = any(term in title_lower for term in language_indicators)
     
     # Check for quality educational channels
     quality_channels = [
@@ -625,7 +654,8 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         contains_tech and 
         (contains_educational or is_quality_channel) and 
         not contains_negative and
-        not is_too_broad
+        not is_too_broad and
+        not has_too_many_hashtags  # Additional check for hashtag-heavy titles
     )
     
     # Calculate confidence score
@@ -643,9 +673,11 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
     if contains_language:
         confidence += 0.1
     if contains_negative:
-        confidence -= 0.3
+        confidence -= 0.4  # Increased penalty for negative patterns
     if is_too_broad:
         confidence -= 0.3
+    if has_too_many_hashtags:
+        confidence -= 0.4  # Strong penalty for hashtag-filled titles
     
     # Clamp confidence to [0.0, 1.0]
     confidence = max(0.0, min(1.0, confidence))
@@ -663,8 +695,14 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         explanation_parts.append("from a recognized quality channel")
     if contains_language:
         explanation_parts.append("language-specific tutorial")
-    if contains_negative:
+    if any(pattern in title_lower for pattern in negative_patterns):
         explanation_parts.append("contains non-educational patterns")
+    if any(pattern in title_lower for pattern in viral_patterns):
+        explanation_parts.append("appears to be short-form/viral content")
+    if any(pattern in title_lower for pattern in social_media_patterns):
+        explanation_parts.append("appears to be social media content")
+    if has_too_many_hashtags:
+        explanation_parts.append("contains too many hashtags (likely not educational)")
     if is_too_broad:
         explanation_parts.append("too broad for specific technology")
     

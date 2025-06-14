@@ -26,7 +26,24 @@ const RoadmapQuestionsPage = () => {
     }
     setLearningTopic(storedTopic);
     
-    // Generate questions based on the topic
+    // Check for pre-generated questions first
+    const preGeneratedQuestions = localStorage.getItem('preGeneratedQuestions');
+    if (preGeneratedQuestions) {
+      try {
+        const parsedQuestions = JSON.parse(preGeneratedQuestions);
+        if (Array.isArray(parsedQuestions) && parsedQuestions.length === 3) {
+          setQuestions(parsedQuestions);
+          setLoading(false);
+          // Clear the pre-generated questions so they're not used again
+          localStorage.removeItem('preGeneratedQuestions');
+          return;
+        }
+      } catch (error) {
+        console.error('Error parsing pre-generated questions:', error);
+      }
+    }
+    
+    // If no pre-generated questions, generate them now
     const generateQuestions = async () => {
       setLoading(true);
       try {
@@ -38,7 +55,7 @@ const RoadmapQuestionsPage = () => {
         setQuestions([
           `What's your current experience level with ${storedTopic}?`,
           `What's your main goal for learning ${storedTopic}?`,
-          `How much time can you dedicate each week to learning ${storedTopic}?`
+          `How much content would you like included in your ${storedTopic} roadmap? (e.g., just essentials, balanced approach, or comprehensive coverage)`
         ]);
       } finally {
         setLoading(false);
@@ -74,7 +91,7 @@ const RoadmapQuestionsPage = () => {
         topic: learningTopic,
         experienceLevel: answers.question1,
         learningGoal: answers.question2,
-        timeCommitment: answers.question3
+        contentAmount: answers.question3
       };
       
       // Store for the results page

@@ -107,6 +107,20 @@ async def startup_event():
 async def shutdown_event():
     """Shutdown event handler"""
     logger.info("Shutting down YouTube API")
+    # Add a small delay to ensure resources are properly released
+    # This helps prevent issues during hot reloads
+    try:
+        import time
+        time.sleep(0.5)
+    except:
+        pass
+    
+    # Force garbage collection to clean up resources
+    try:
+        import gc
+        gc.collect()
+    except:
+        pass
 
 def clean_repeated_title(data: Dict[str, Any]) -> Dict[str, Any]:
     """Clean repeated titles in data recursively, handling any nested structures"""

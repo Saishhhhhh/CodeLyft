@@ -1,42 +1,103 @@
 // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-const GROQ_API_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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'
-];
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 
-let currentKeyIndex = 0;
+// Track API call metrics
+const apiMetrics = {
+  calls: 0,
+  successes: 0,
+  failures: 0,
+  totalTokens: 0,
+  latencies: [],
+  callTypes: {}
+};
 
 /**
- * Get the next available Groq API key
+ * Track an API call for metrics
+ * @param {string} callType - Type of API call (e.g., 'validate', 'questions', 'combined')
+ * @param {number} latency - Call latency in ms
+ * @param {boolean} success - Whether the call succeeded
+ * @param {number} tokens - Total tokens used (if available)
+ */
+const trackApiCall = (callType, latency, success, tokens = 0) => {
+  apiMetrics.calls++;
+  if (success) apiMetrics.successes++;
+  else apiMetrics.failures++;
+  
+  apiMetrics.totalTokens += tokens;
+  apiMetrics.latencies.push(latency);
+  
+  // Track by call type
+  if (!apiMetrics.callTypes[callType]) {
+    apiMetrics.callTypes[callType] = { calls: 0, totalLatency: 0, tokens: 0 };
+  }
+  
+  apiMetrics.callTypes[callType].calls++;
+  apiMetrics.callTypes[callType].totalLatency += latency;
+  apiMetrics.callTypes[callType].tokens += tokens;
+  
+  console.log(`API Metrics - Total Calls: ${apiMetrics.calls}, Avg Latency: ${getAverageLatency().toFixed(2)}ms`);
+  console.log(`Call Type: ${callType}, Success: ${success}, Latency: ${latency.toFixed(2)}ms`);
+};
+
+/**
+ * Get average API call latency
+ * @returns {number} Average latency in ms
+ */
+const getAverageLatency = () => {
+  if (apiMetrics.latencies.length === 0) return 0;
+  return apiMetrics.latencies.reduce((sum, val) => sum + val, 0) / apiMetrics.latencies.length;
+};
+
+/**
+ * Get API metrics summary
+ * @returns {Object} API usage metrics
+ */
+export const getApiMetrics = () => {
+  return {
+    ...apiMetrics,
+    averageLatency: getAverageLatency(),
+    callTypeBreakdown: Object.entries(apiMetrics.callTypes).map(([type, data]) => ({
+      type,
+      calls: data.calls,
+      averageLatency: data.calls > 0 ? data.totalLatency / data.calls : 0,
+      averageTokens: data.calls > 0 ? data.tokens / data.calls : 0
+    }))
+  };
+};
+
+// OpenRouter API keys for video/content relevance checks
+const OPENROUTER_API_KEYS = [
+  import.meta.env.VITE_OPENROUTER_API_KEY_1,
+  import.meta.env.VITE_OPENROUTER_API_KEY_2,
+  import.meta.env.VITE_OPENROUTER_API_KEY_3
+];
+
+let openRouterKeyIndex = 0;
+
+/**
+ * Get the next available OpenRouter API key
  * @returns {string} The next API key to use
  */
-const getNextGroqApiKey = () => {
-  currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
-  return GROQ_API_KEYS[currentKeyIndex];
+const getNextOpenRouterApiKey = () => {
+  openRouterKeyIndex = (openRouterKeyIndex + 1) % OPENROUTER_API_KEYS.length;
+  return OPENROUTER_API_KEYS[openRouterKeyIndex];
 };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_RATE_LIMIT_DELAY = 5000; // Increase delay to 5 seconds
-const GROQ_MAX_RETRIES = 3;
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const API_RATE_LIMIT_DELAY = 5000; // 5 seconds
+const API_MAX_RETRIES = 3;
 
 import { roadmapData } from '../data/roadmapData';
 
 export const validateLearningTopic = async (topic) => {
-  let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
-  
-  while (retryCount < GROQ_MAX_RETRIES) {
     try {
+      const startTime = performance.now();
+      
       const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${currentKey}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -82,23 +143,26 @@ export const validateLearningTopic = async (topic) => {
         })
       });
 
-      if (response.status === 429) { // Rate limit
-        retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-          continue;
-        } else {
-          throw new Error('Max retries reached for Groq API');
-        }
+      const endTime = performance.now();
+      const latency = endTime - startTime;
+      let success = false;
+      let tokens = 0;
+
+      if (response.status === 429) {
+        trackApiCall('validate', latency, false);
+        throw new Error('Rate limit reached. Please try again in a few moments.');
       }
 
       if (!response.ok) {
-        throw new Error('Failed to validate learning topic');
+        trackApiCall('validate', latency, false);
+        throw new Error(`Failed to validate learning topic: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      tokens = data.usage?.total_tokens || 0;
+      success = true;
+      trackApiCall('validate', latency, success, tokens);
+      
       const content = data.choices[0].message.content;
       
       // Clean the response content
@@ -157,14 +221,10 @@ export const validateLearningTopic = async (topic) => {
       }
     } catch (error) {
       console.error('Error validating learning topic:', error);
-      if (retryCount < GROQ_MAX_RETRIES - 1) {
-        retryCount++;
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-        continue;
-      }
-      throw error;
-    }
+    throw {
+      message: 'Unable to validate your learning topic. Please try again later.',
+      originalError: error.message
+    };
   }
 };
 
@@ -213,13 +273,15 @@ function getQuestionsContext(topic) {
 
 export const generateLearningQuestions = async (topic) => {
   try {
+    const startTime = performance.now();
+    
     // Get relevant roadmap context
     const roadmapContext = getQuestionsContext(topic);
     
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEYS[currentKeyIndex]}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -234,7 +296,7 @@ ${roadmapContext}
 Rules for generating questions:
 1. First question should ask about their current experience level with the topic and related technologies
 2. Second question should ask about their preferred learning path/stack based on the roadmap.sh data
-3. Third question should ask about their specific goals or focus areas within the topic
+3. Third question should ask about how much content they would like included in their roadmap (e.g., "Just the essentials", "Balanced approach", "Comprehensive coverage", "Quick overview", "Deep dive")
             4. Questions should be specific to the topic and help gather information for creating a personalized roadmap
 5. Use the roadmap.sh data to inform your questions about:
    - Relevant technology stacks and paths
@@ -247,7 +309,7 @@ Rules for generating questions:
 For example, if the topic is "Web Development" and the roadmap shows Frontend and Backend paths:
 1. "What is your current experience with HTML, CSS, and JavaScript? Have you worked with any frontend frameworks?"
 2. "Would you prefer to focus on frontend development (React, Vue), backend development (Node.js, Python), or full-stack development?"
-3. "What specific type of web applications are you interested in building? (e.g., e-commerce, social media, business applications)"
+3. "How much content would you like included in your web development roadmap? (e.g., just essentials, balanced approach, or comprehensive coverage)"
 
             Respond with a JSON object containing:
             {
@@ -270,11 +332,26 @@ For example, if the topic is "Web Development" and the roadmap shows Frontend an
       })
     });
 
+    const endTime = performance.now();
+    const latency = endTime - startTime;
+    let success = false;
+    let tokens = 0;
+
+    if (response.status === 429) {
+      trackApiCall('questions', latency, false);
+      throw new Error('Rate limit reached. Please try again in a few moments.');
+    }
+
     if (!response.ok) {
-      throw new Error('Failed to generate questions');
+      trackApiCall('questions', latency, false);
+      throw new Error(`Failed to generate questions: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
+    tokens = data.usage?.total_tokens || 0;
+    success = true;
+    trackApiCall('questions', latency, success, tokens);
+    
     const content = data.choices[0].message.content;
     
     // Clean the response content by removing any markdown formatting
@@ -290,7 +367,10 @@ For example, if the topic is "Web Development" and the roadmap shows Frontend an
     }
   } catch (error) {
     console.error('Error generating questions:', error);
-    throw error;
+    throw {
+      message: 'Unable to generate learning questions. Please try again later.',
+      originalError: error.message
+    };
   }
 };
 
@@ -463,23 +543,33 @@ function prepareApiResponse(content) {
     fixedJson = '['.repeat(closeBrackets - openBrackets) + fixedJson;
   }
   
-  // Fix common JSON syntax errors before parsing
-  // 1. Fix missing commas after properties (common issue in LLM outputs)
+  // STEP 1: Fix common JSON syntax errors
+  
+  // Fix the specific issue we're observing - duplicated colons in property names
+  // From: "title": ": "Learning Roadmap for MERN Stack", " => "title": "Learning Roadmap for MERN Stack"
+  fixedJson = fixedJson.replace(/"([^"]+)":\s*":\s*"([^"]+)",\s*"/g, '"$1": "$2", "');
+  fixedJson = fixedJson.replace(/"([^"]+)":\s*":\s*"([^"]+)"\s*([,}])/g, '"$1": "$2"$3');
+  
+  // Fix property name format issues with extra colons - new pattern from logs
+  fixedJson = fixedJson.replace(/"([^"]+)":\s*"([^"]+)",\s*"([^"]+)/g, '"$1": "$2", "$3');
+  fixedJson = fixedJson.replace(/"\s*:\s*"([^"]+)"\s*,/g, '"$1", '); // ": "name", => "name",
+  fixedJson = fixedJson.replace(/"\s*:\s*"([^"]+)"\s*}/g, '"$1"}');   // ": "name"} => "name"}
+  
+  // More aggressive fix for property name issues
+  fixedJson = fixedJson.replace(/"([^"]+)":\s*"([^"]+)"\s*,\s*"/g, '"$1": "$2", "');
+  
+  // Fix missing commas after properties
   fixedJson = fixedJson.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*")/g, '"$1": "$2",\n  "');
   fixedJson = fixedJson.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*})/g, '"$1": "$2"\n  }');
   fixedJson = fixedJson.replace(/"([^"]+)"\s*:\s*([^",\s\n\r\t{}]+)\s*(\n\s*")/g, '"$1": $2,\n  "');
   
-  // 2. Fix the specific issue seen in logs - missing comma between description and difficulty
+  // Fix the specific issue seen in logs - missing comma between description and difficulty
   fixedJson = fixedJson.replace(/"description"\s*:\s*"([^"]*)"\s*"difficulty"/g, '"description": "$1", "difficulty"');
   
   return fixedJson;
 }
 
 export const generateLearningRoadmap = async (userData) => {
-  let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
-  
-  while (retryCount < GROQ_MAX_RETRIES) {
     try {
       console.log("Generating roadmap with user data:", userData);
       
@@ -503,18 +593,34 @@ Follow these guidelines:
 5. Organize everything in a logical learning progression from beginner to advanced
 6. Use the roadmap.sh data as a reference for valid technology sequences
 
-IMPORTANT:
+EXTREMELY IMPORTANT JSON FORMATTING RULES:
 - Follow the provided JSON schema EXACTLY - do not add or modify properties
 - Do not include URLs, time estimates, or resource links
 - Keep everything extremely simple and high-level
 - Ensure the JSON is valid and properly formatted without any syntax errors
+- MAKE SURE YOUR JSON CAN BE PARSED with JSON.parse() - this is critical!
+- Never place a bare value without a property name (like "intermediate" by itself)
+- Every property must have both a name and a value separated by a colon (e.g., "difficulty": "intermediate")
+- Every property-value pair in an object must be followed by either a comma or a closing brace
+- Every object in an array must be followed by either a comma or a closing bracket
 - Every opening bracket MUST have a matching closing bracket
 - Count and verify that your [ and ] brackets are balanced
 - Count and verify that your { and } brackets are balanced
 - Each technology in the path should be its own item in the mainPath array
+- The projects array must always be an array with square brackets [], even if empty
 - Every item MUST have title, description, and difficulty fields with proper "key": "value" format
-- Include prerequisites, advanced topics, and practice projects
-- DOUBLE-CHECK YOUR JSON STRUCTURE before returning
+- COMPARE your final JSON against the provided example to ensure it has the same structure
+- DO NOT use colons within property names!
+
+COMMON JSON ERRORS TO AVOID:
+- Missing commas between properties
+- Missing property names before values
+- Missing colons between property names and values
+- Unbalanced brackets and braces
+- Double inclusion of the same property
+- Properties outside of objects
+- Missing difficulty property on mainPath items
+- Duplicated colons (like "title": ": "value") - this is a serious error!
 
 The roadmap should follow this EXACT schema:
 {
@@ -561,7 +667,7 @@ My current experience level: ${userData.experienceLevel}
 
 My learning goals: ${userData.learningGoal}
 
-My time commitment: ${userData.timeCommitment}
+Content amount preference: ${userData.contentAmount}
 
 Please create a simple roadmap with valid JSON syntax that covers just the main technologies/topics I need to learn. Include prerequisites, advanced topics, and practice projects.`
           }
@@ -575,7 +681,7 @@ Please create a simple roadmap with valid JSON syntax that covers just the main 
       const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${currentKey}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody)
@@ -583,193 +689,170 @@ Please create a simple roadmap with valid JSON syntax that covers just the main 
 
       console.log("Response status:", response.status);
       
-      if (response.status === 429) { // Rate limit
-        retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-          continue;
-        } else {
-          throw new Error('Max retries reached for Groq API');
-        }
+    if (response.status === 429) {
+      throw new Error('Rate limit reached. Please try again in a few moments.');
       }
       
       if (!response.ok) {
         throw new Error(`Failed to generate roadmap: ${response.status} ${response.statusText}`);
       }
 
-      const responseData = await response.json();
-      console.log("Received response from Groq API:", responseData);
+      const data = await response.json();
+      console.log("Received response from Groq API:", data);
       
-      const content = responseData.choices[0].message.content;
+      const content = data.choices[0].message.content;
       console.log("Roadmap content:", content);
       
-      // Use the simplified parsing approach
-      const simplifiedRoadmap = parseSimplifiedRoadmap(content);
+      // First try to use prepareApiResponse to clean up the JSON
+      const preparedContent = prepareApiResponse(content);
       
-      return simplifiedRoadmap;
-    } catch (error) {
-      console.error('Error generating roadmap:', error);
-      
-      if (retryCount < GROQ_MAX_RETRIES - 1 && error.message.includes('429')) {
-        retryCount++;
-        console.log(`Retrying after error (${retryCount}/${GROQ_MAX_RETRIES})...`);
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-        continue;
-      }
-      
-      throw error;
-    }
-  }
-};
-
-// Simplified roadmap parsing without keyword-specific debugging
-function parseSimplifiedRoadmap(content) {
+      try {
+        // First try to parse using native JSON.parse
+        const parsedRoadmap = JSON.parse(preparedContent);
+        console.log("Successfully parsed roadmap JSON");
+        
+        // Ensure we have a sections array that matches the mainPath
+        if (parsedRoadmap.mainPath && !parsedRoadmap.sections) {
+          parsedRoadmap.sections = parsedRoadmap.mainPath.map(item => ({
+            title: item.title,
+            description: item.description,
+            difficulty: item.difficulty,
+            topics: [{ title: item.title, description: item.description }]
+          }));
+        }
+        
+        return parsedRoadmap;
+      } catch (parseError) {
+        console.error("Error parsing fixed JSON:", parseError);
+        
+        // If JSON parsing fails, use the previously implemented simplified parsing functions
   try {
     // Extract JSON content from markdown code blocks
     let jsonContent = content;
-    console.log("Original content length:", content.length);
     
     if (content.includes('```')) {
       console.log("Found code block in response");
       const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (codeBlockMatch && codeBlockMatch[1]) {
         jsonContent = codeBlockMatch[1].trim();
-        console.log("Extracted JSON from code block, length:", jsonContent.length);
-      }
-    }
-
-    // Fix common JSON syntax errors before parsing
-    // 1. Fix missing commas after properties (common issue in LLM outputs)
-    jsonContent = jsonContent.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*")/g, '"$1": "$2",\n  "');
-    jsonContent = jsonContent.replace(/"([^"]+)"\s*:\s*"([^"]+)"\s*(\n\s*})/g, '"$1": "$2"\n  }');
-    jsonContent = jsonContent.replace(/"([^"]+)"\s*:\s*([^",\s\n\r\t{}]+)\s*(\n\s*")/g, '"$1": $2,\n  "');
-    
-    // 2. Fix the specific issue seen in logs - missing comma between description and difficulty
-    jsonContent = jsonContent.replace(/"description"\s*:\s*"([^"]*)"\s*"difficulty"/g, '"description": "$1", "difficulty"');
-
-    // Try to parse the JSON
-    const parsedContent = JSON.parse(jsonContent);
-    
-    console.log("Successfully parsed roadmap JSON:", {
-      hasMainPath: !!parsedContent.mainPath,
-      mainPathLength: parsedContent.mainPath ? parsedContent.mainPath.length : 0,
-      hasPrerequisites: !!parsedContent.prerequisites,
-      hasAdvancedTopics: !!parsedContent.advancedTopics,
-      advancedTopicsLength: parsedContent.advancedTopics ? parsedContent.advancedTopics.length : 0,
-      hasProjects: !!parsedContent.projects
-    });
-
-    // Convert the mainPath array to the sections format expected by the UI
-    const sections = Array.isArray(parsedContent.mainPath) ? 
-      parsedContent.mainPath.map(item => {
-        // Normalize the technology name to avoid duplicates like "HTML HTML"
-        const normalizedTitle = item.title ? 
-          item.title.split(' ')
-            .filter((word, index, arr) => arr.indexOf(word) === index)
-            .join(' ') : 
-          "Technology";
+            }
+          }
           
-        return {
-          title: normalizedTitle,
-          description: item.description || "Learn this technology",
-          difficulty: item.difficulty || 'beginner',
-          topics: [{
-            title: `Complete ${normalizedTitle}`,
-            description: item.description || `Learn ${normalizedTitle} fundamentals`
-          }]
-        };
-      }) : [];
-
-    // Create the roadmap structure for the UI
-    const roadmap = {
-      title: parsedContent.title || "Learning Roadmap",
-      description: parsedContent.description || "A comprehensive learning guide",
-      sections: sections,
-      prerequisites: parsedContent.prerequisites || [],
-      advancedTopics: parsedContent.advancedTopics || [],
-      projects: parsedContent.projects || []
-    };
-
-    return roadmap;
-  } catch (error) {
-    console.error('Error parsing roadmap JSON:', error);
-    console.error('Error occurred at:', error.stack);
-    
-    // Log a snippet of the content for debugging
-    if (typeof content === 'string') {
-      const snippetLength = 200;
-      const contentStart = content.substring(0, snippetLength);
-      const contentEnd = content.length > snippetLength ? 
-        content.substring(content.length - snippetLength) : '';
-      
-      console.error(`Content start (${snippetLength} chars):`, contentStart);
-      if (contentEnd) {
-        console.error(`Content end (${snippetLength} chars):`, contentEnd);
-      }
-      
-      // Check for common JSON issues
-      const openBraces = (content.match(/{/g) || []).length;
-      const closeBraces = (content.match(/}/g) || []).length;
-      const openBrackets = (content.match(/\[/g) || []).length;
-      const closeBrackets = (content.match(/\]/g) || []).length;
-      
-      console.error('JSON balance check:', {
-        braces: `${openBraces}:{, ${closeBraces}:} - ${openBraces === closeBraces ? 'balanced' : 'unbalanced'}`,
-        brackets: `${openBrackets}:[, ${closeBrackets}:] - ${openBrackets === closeBrackets ? 'balanced' : 'unbalanced'}`
-      });
-      
-      // Try a more aggressive approach to fix the JSON
-      try {
-        // Attempt to manually fix the specific error from the logs
-        if (content.includes('"description": "') && content.includes('"difficulty":')) {
-          const fixedContent = content.replace(/"description"\s*:\s*"([^"]*)"\s*"difficulty"/g, '"description": "$1", "difficulty"');
-          const parsedFixed = JSON.parse(fixedContent);
-          console.log("Successfully parsed after fixing missing comma between description and difficulty");
+          // Try more aggressive fixes for the specific issue we're seeing
+          jsonContent = jsonContent.replace(/":\s*"/g, '":"'); // Fix double colons in properties
+          jsonContent = jsonContent.replace(/,\s*"/g, ',"'); // Fix spacing after commas
           
-          // Convert to the expected format
-          const sections = Array.isArray(parsedFixed.mainPath) ? 
-            parsedFixed.mainPath.map(item => ({
-              title: item.title || "Technology",
-              description: item.description || "Learn this technology",
-              difficulty: item.difficulty || 'beginner',
-              topics: [{
-                title: `Complete ${item.title || "Technology"}`,
-                description: item.description || `Learn ${item.title || "technology"} fundamentals`
-              }]
-            })) : [];
+          // Specific fix for the pattern seen in the logs - duplicate colons in property names
+          // From: "title": ": "Learning Roadmap for MERN Stack" => "title": "Learning Roadmap for MERN Stack"
+          jsonContent = jsonContent.replace(/"([^"]+)":\s*":\s*"/g, '"$1": "');
           
-          return {
-            title: parsedFixed.title || "Learning Roadmap",
-            description: parsedFixed.description || "A comprehensive learning guide",
-            sections: sections,
-            prerequisites: parsedFixed.prerequisites || [],
-            advancedTopics: parsedFixed.advancedTopics || [],
-            projects: parsedFixed.projects || []
+          // Fix missing "description": in Git section, a common error from LLM
+          jsonContent = jsonContent.replace(/"Git",\s*"([^"]+)",/g, '"Git", "description": "$1",');
+          jsonContent = jsonContent.replace(/"Git",\s*"([^"]+)"\s*}/g, '"Git", "description": "$1" }');
+          
+          // More general fix for any key missing the "description" property name
+          jsonContent = jsonContent.replace(/"([^"]+)",\s*"([^"]+)",\s*"difficulty"/g, '"$1", "description": "$2", "difficulty"');
+          jsonContent = jsonContent.replace(/"([^"]+)",\s*"([^"]+)"\s*}/g, '"$1", "description": "$2" }');
+          
+          // Try to parse the fixed content
+          const fixedParsedRoadmap = JSON.parse(jsonContent);
+          console.log("Successfully parsed roadmap JSON after more aggressive fixes");
+          
+          // Ensure we have a sections array that matches the mainPath
+          if (fixedParsedRoadmap.mainPath && !fixedParsedRoadmap.sections) {
+            fixedParsedRoadmap.sections = fixedParsedRoadmap.mainPath.map(item => ({
+              title: item.title,
+              description: item.description,
+              difficulty: item.difficulty,
+              topics: [{ title: item.title, description: item.description }]
+            }));
+          }
+          
+          return fixedParsedRoadmap;
+        } catch (secondParseError) {
+          console.error("Failed to parse roadmap JSON with aggressive fixes:", secondParseError);
+          console.log("Raw content:", content);
+          
+          // As a last resort, return a simplified minimal roadmap structure
+          const fallbackRoadmap = {
+            title: `Learning Roadmap for ${userData.topic}`,
+            description: `A guide to learning ${userData.topic} based on your experience level: ${userData.experienceLevel || 'Beginner'} and goals: ${userData.learningGoal || 'Complete understanding'}`,
+            sections: [
+              {
+                title: userData.topic,
+                description: `Learn ${userData.topic} fundamentals`,
+                difficulty: "beginner",
+                topics: [
+                  {
+                    title: userData.topic,
+                    description: `Learn ${userData.topic} fundamentals based on your preferences`
+                  }
+                ]
+              }
+            ],
+            mainPath: [
+              {
+                title: userData.topic,
+                description: `Learn ${userData.topic} fundamentals`,
+                difficulty: "beginner"
+              }
+            ],
+            prerequisites: [],
+            advancedTopics: [
+              {
+                title: `Advanced ${userData.topic}`,
+                description: "More advanced concepts to explore later"
+              }
+            ],
+            projects: [
+              {
+                title: `Practice ${userData.topic} Project`,
+                description: "A project to apply your knowledge",
+                difficulty: "intermediate"
+              }
+            ]
           };
+          
+          console.log("Returning emergency fallback roadmap structure");
+          
+          // Ensure we have a sections array that matches the mainPath
+          if (fallbackRoadmap.mainPath && !fallbackRoadmap.sections) {
+            fallbackRoadmap.sections = fallbackRoadmap.mainPath.map(item => ({
+              title: item.title,
+              description: item.description,
+              difficulty: item.difficulty,
+              topics: [{ title: item.title, description: item.description }]
+            }));
+          }
+          
+          return fallbackRoadmap;
         }
-      } catch (fixError) {
-        console.error("Failed to fix JSON with manual approach:", fixError);
       }
+    } catch (error) {
+      console.error('Error generating roadmap:', error);
+      throw {
+        message: 'Unable to generate learning roadmap. Please try again later.',
+        originalError: error.message
+      };
     }
-    
-    // Return null instead of a default roadmap
-    return null;
   }
-}
 
-export const evaluateVideoRelevance = async (videoTitle, videoDescription, topic) => {
-  let retryCount = 0;
-  let currentKey = GROQ_API_KEYS[currentKeyIndex];
-  
-  while (retryCount < GROQ_MAX_RETRIES) {
-    try {
+/**
+ * Validates a learning topic and generates questions in a single API call
+ * @param {string} topic - The learning topic to validate and generate questions for
+ * @returns {Promise<Object>} - Object containing validation result and questions
+ */
+export const validateAndGenerateQuestions = async (topic) => {
+  try {
+    const startTime = performance.now();
+    
+    // Get relevant roadmap context
+    const roadmapContext = getQuestionsContext(topic);
+    
       const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${currentKey}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -777,108 +860,145 @@ export const evaluateVideoRelevance = async (videoTitle, videoDescription, topic
           messages: [
             {
               role: 'system',
-              content: `You are a video relevance evaluator. Your task is to determine if a video is relevant to a given learning topic.
+            content: `You are both a learning topic validator and question generator for creating personalized learning roadmaps. You have two tasks:
 
-              Rules for evaluation:
-              1. Consider both the video title and description
-              2. Look for semantic relevance, not just exact keyword matches
-              3. Consider alternative terms and related concepts
-              4. Evaluate the depth and scope of the content
-              5. Consider the target audience and skill level
+TASK 1 - VALIDATE THE TOPIC:
+1. Extract the main learning topic from the user's input, even if it's in natural language
+2. Determine if it's a valid technology or skill that can be learned
+3. If multiple topics are mentioned, focus on the main one
+4. Respond with validation information
 
-              For example:
-              - A video titled "SQL Tutorial for Beginners" is relevant to "Database with SQL"
-              - A video about "Python Basics" is relevant to "Python Programming"
-              - A video about "Web Development" is relevant to "Frontend Development"
+Valid topics include:
+- Programming languages (Python, JavaScript)
+- Frameworks (React, Django)
+- Technologies (Docker, Kubernetes)
+- Development stacks (MERN, MEAN, LAMP)
+- Specific skills (Data Science, Machine Learning)
+- Broad topics (Web Development, Mobile Development)
 
-              Respond with a JSON object containing:
-              {
-                "isRelevant": boolean,
-                "relevanceScore": number (0-1),
-                "reason": "explanation of why it is or isn't relevant",
-                "suggestedTitle": "how the title could be improved if not relevant"
-              }
+Invalid topics include:
+- General questions (how to make friends)
+- Personal problems
+- Non-technical topics
+
+TASK 2 - GENERATE QUESTIONS:
+If the topic is valid, generate 3 relevant questions to help create a personalized learning roadmap using this context:
+
+${roadmapContext}
+
+Rules for generating questions:
+1. First question should ask about their current experience level with the topic and related technologies
+2. Second question should ask about their preferred learning path/stack based on the roadmap.sh data
+3. Third question should ask about how much content they would like included in their roadmap (e.g., "Just the essentials", "Balanced approach", "Comprehensive coverage", "Quick overview", "Deep dive")
+4. Questions should be specific to the topic and help gather information for creating a personalized roadmap
+5. Use the roadmap.sh data to inform your questions about:
+   - Relevant technology stacks and paths
+   - Common prerequisites and dependencies
+   - Typical learning progressions
+   - Important focus areas
+6. Keep questions clear and concise
+7. Make questions specific to the learning paths shown in the roadmap.sh data
+
+Example questions for "Web Development":
+1. "What is your current experience with HTML, CSS, and JavaScript? Have you worked with any frontend frameworks?"
+2. "Would you prefer to focus on frontend development (React, Vue), backend development (Node.js, Python), or full-stack development?"
+3. "How much content would you like included in your web development roadmap? (e.g., just essentials, balanced approach, or comprehensive coverage)"
+
+Respond with a JSON object containing BOTH validation and questions:
+{
+  "validation": {
+    "isValid": boolean,
+    "extractedTopic": "the main topic extracted from the input",
+    "reason": "explanation of why it's valid or invalid",
+    "example": "a valid example if the input is invalid"
+  },
+  "questions": [
+    "first question",
+    "second question",
+    "third question"
+  ]
+}
+
+Note: The "questions" array should be populated only if isValid is true. If isValid is false, return an empty array for questions.
 
               IMPORTANT: Return ONLY the JSON object, no markdown formatting or additional text.`
             },
             {
               role: 'user',
-              content: `Evaluate if this video is relevant to the topic "${topic}":
-
-              Title: ${videoTitle}
-              Description: ${videoDescription}`
+            content: topic
             }
           ],
-          temperature: 0.3,
-          max_tokens: 150
+        temperature: 0.5,
+        max_tokens: 400
         })
       });
 
-      if (response.status === 429) { // Rate limit
-        retryCount++;
-        if (retryCount < GROQ_MAX_RETRIES) {
-          console.log(`Groq API rate limit reached. Rotating API key and retrying...`);
-          currentKey = getNextGroqApiKey();
-          await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-          continue;
-        } else {
-          throw new Error('Max retries reached for Groq API');
-        }
+    const endTime = performance.now();
+    const latency = endTime - startTime;
+    let success = false;
+    let tokens = 0;
+
+    if (response.status === 429) {
+      trackApiCall('combined', latency, false);
+      throw new Error('Rate limit reached. Please try again in a few moments.');
       }
 
       if (!response.ok) {
-        throw new Error('Failed to evaluate video relevance');
+      trackApiCall('combined', latency, false);
+      throw new Error(`Failed to validate topic and generate questions: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+    tokens = data.usage?.total_tokens || 0;
+    success = true;
+    trackApiCall('combined', latency, success, tokens);
+    
       const content = data.choices[0].message.content;
       
-      // Clean and parse the response
+    // Clean the response content
       let cleanContent = content
+      // Remove any markdown formatting
         .replace(/```json\n?|\n?```/g, '')
+      // Remove any whitespace at the start and end
         .trim();
       
-      try {
-        const relevanceResult = JSON.parse(cleanContent);
-        
-        // Validate the structure
-        if (typeof relevanceResult.isRelevant !== 'boolean' ||
-            typeof relevanceResult.relevanceScore !== 'number' ||
-            typeof relevanceResult.reason !== 'string') {
+    // If the content starts with text rather than a JSON object, extract just the JSON part
+    if (!cleanContent.startsWith('{')) {
+      const jsonStartIndex = cleanContent.indexOf('{');
+      if (jsonStartIndex > -1) {
+        cleanContent = cleanContent.substring(jsonStartIndex);
+      }
+    }
+    
+    // If the content ends with text after the JSON object, remove it
+    const lastBraceIndex = cleanContent.lastIndexOf('}');
+    if (lastBraceIndex > -1 && lastBraceIndex < cleanContent.length - 1) {
+      cleanContent = cleanContent.substring(0, lastBraceIndex + 1);
+    }
+    
+    try {
+      // Parse the content as JSON
+      const result = JSON.parse(cleanContent);
+      
+      // Validate the structure of the result
+      if (typeof result.validation?.isValid !== 'boolean' ||
+          typeof result.validation?.extractedTopic !== 'string' ||
+          typeof result.validation?.reason !== 'string' ||
+          !Array.isArray(result.questions)) {
           throw new Error('Invalid response structure');
         }
         
-        return relevanceResult;
+      return result;
       } catch (parseError) {
-        console.error('Failed to parse relevance result:', parseError);
+      console.error('Failed to parse validation and questions result:', parseError);
         console.log('Raw content:', content);
-        
-        // Try to extract values using regex as fallback
-        const isRelevantMatch = cleanContent.match(/"isRelevant"\s*:\s*(true|false)/);
-        const scoreMatch = cleanContent.match(/"relevanceScore"\s*:\s*(\d+(?:\.\d+)?)/);
-        const reasonMatch = cleanContent.match(/"reason"\s*:\s*"([^"]+)"/);
-        const titleMatch = cleanContent.match(/"suggestedTitle"\s*:\s*"([^"]+)"/);
-        
-        if (isRelevantMatch && scoreMatch && reasonMatch) {
-          return {
-            isRelevant: isRelevantMatch[1] === 'true',
-            relevanceScore: parseFloat(scoreMatch[1]),
-            reason: reasonMatch[1],
-            suggestedTitle: titleMatch ? titleMatch[1] : null
-          };
-        }
-        
-        throw new Error('Invalid response format from relevance evaluation');
+      throw new Error('Invalid response format from service');
       }
     } catch (error) {
-      console.error('Error evaluating video relevance:', error);
-      if (retryCount < GROQ_MAX_RETRIES - 1) {
-        retryCount++;
-        currentKey = getNextGroqApiKey();
-        await new Promise(resolve => setTimeout(resolve, GROQ_RATE_LIMIT_DELAY));
-        continue;
-      }
-      throw error;
-    }
+    console.error('Error validating topic and generating questions:', error);
+    throw {
+      message: 'Unable to validate your learning topic and generate questions. Please try again later.',
+      originalError: error.message
+    };
   }
 }; 

@@ -154,7 +154,7 @@ export const cleanupExpiredResources = async () => {
     console.error('Error cleaning up resources:', error);
     return { success: false, error: error.message };
   }
-};
+}; 
 
 /**
  * Update shared resources after roadmap generation
