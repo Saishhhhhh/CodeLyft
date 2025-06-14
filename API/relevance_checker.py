@@ -172,16 +172,34 @@ RECOGNIZE COMMON TECHNOLOGY NAME VARIATIONS:
 - Recognize that "Mongo" and "MongoDB" refer to the same technology
 - Recognize that "Postgres" and "PostgreSQL" refer to the same technology
 
+TECHNOLOGY EXTRACTION TASK - VERY IMPORTANT:
+For EVERY title, you MUST extract ALL technology names mentioned. For each title, thoroughly analyze and identify:
+1. Main technologies (JavaScript, Python, React, Node.js, etc.)
+2. Frameworks (Express, Django, Laravel, etc.)
+3. Libraries (Redux, Mongoose, etc.)
+4. Databases (MongoDB, MySQL, PostgreSQL, etc.)
+5. Tools (Docker, Git, AWS, Azure, etc.)
+6. Languages (C#, Java, etc.)
+
+MAKE SURE to normalize technology names in the "technologies" field:
+- Use "node.js" instead of "node", "nodejs" or "node js"
+- Use "javascript" instead of "js"
+- Use "typescript" instead of "ts"
+- Use "react" instead of "reactjs"
+- Use "mongodb" instead of "mongo"
+
 Please evaluate each of the following titles and determine if they are relevant educational content for learning {technology}.
 For each title, provide:
 1. A boolean "isRelevant" (true/false)
 2. A confidence score "similarity" (0.0 to 1.0)
 3. A brief "explanation" of your decision
+4. An array of extracted technologies in the "technologies" field - THIS IS REQUIRED FOR EVERY TITLE
 
 Titles to evaluate:
 {json.dumps(titles, indent=2)}
 
-Respond with a JSON array where each element is an object with "title", "isRelevant", "similarity", and "explanation" fields.
+Respond with a JSON array where each element is an object with "title", "isRelevant", "similarity", "explanation", and "technologies" fields.
+The "technologies" field MUST be included for every title, even if it's an empty array.
 """
 
     return prompt
@@ -310,38 +328,12 @@ def check_batch_relevance(titles: List[str], technology: str) -> Dict[str, Any]:
     """Check if multiple titles are relevant to a technology using Groq LLM (batch processing)"""
     logger.info(f"Checking batch relevance for {len(titles)} titles with technology: '{technology}'")
     
-    # Apply quick rejection rules first to save API calls
-    results = []
-    filtered_titles = []
-    title_to_index = {}
+    # Send all titles directly to LLM processing
+    filtered_titles = titles
+    title_to_index = {title: i for i, title in enumerate(titles)}
+    results = [None] * len(titles)
     
-    for i, title in enumerate(titles):
-        # Check for obvious non-educational patterns
-        if (re.search(r'\bvs\.?\s+|\bversus\b|\bin \d+ seconds\b|#shorts|interview questions|\b\d+ reasons why\b|^top \d+\b', title.lower())):
-            pattern = re.search(r'\bvs\.?\s+|\bversus\b|\bin \d+ seconds\b|#shorts|interview questions|\b\d+ reasons why\b|^top \d+\b', title.lower()).group(0)
-            logger.info(f"Title rejected by pattern match: '{title}' - pattern: '{pattern}'")
-            results.append({
-                "title": title,
-                "isRelevant": False,
-                "similarity": 0.0,
-                "explanation": f"Title contains non-educational pattern: '{pattern}'"
-            })
-        # Check for obvious educational patterns
-        elif (re.search(f"complete {technology.lower()} tutorial for beginners|{technology.lower()} full course|learn {technology.lower()} step by step", title.lower())):
-            pattern = re.search(f"complete {technology.lower()} tutorial for beginners|{technology.lower()} full course|learn {technology.lower()} step by step", title.lower()).group(0)
-            logger.info(f"Title accepted by pattern match: '{title}' - pattern: '{pattern}'")
-            results.append({
-                "title": title,
-                "isRelevant": True,
-                "similarity": 1.0,
-                "explanation": f"Title contains strong educational pattern: '{pattern}'"
-            })
-        else:
-            # Add to filtered titles for LLM processing
-            title_to_index[title] = i
-            filtered_titles.append(title)
-    
-    logger.info(f"Pre-filtering results: {len(results)} titles processed, {len(filtered_titles)} titles need LLM processing")
+    logger.info(f"Sending all {len(filtered_titles)} titles for LLM processing")
     
     # If there are titles that need LLM processing
     if filtered_titles:
@@ -375,39 +367,187 @@ def check_batch_relevance(titles: List[str], technology: str) -> Dict[str, Any]:
             for llm_result in llm_results:
                 title = llm_result.get("title")
                 if title in title_to_index:
+                    idx = title_to_index[title]
                     logger.info(f"Processing LLM result for title: '{title}' - isRelevant: {llm_result.get('isRelevant', False)}")
-                    results.insert(title_to_index[title], {
+                    results[idx] = {
                         "title": title,
                         "isRelevant": llm_result.get("isRelevant", False),
                         "similarity": llm_result.get("similarity", 0.5),
-                        "explanation": llm_result.get("explanation", "No explanation provided")
-                    })
+                        "explanation": llm_result.get("explanation", "No explanation provided"),
+                        "technologies": llm_result.get("technologies", [])
+                    }
                 else:
                     logger.warning(f"Title in LLM result not found in original titles: '{title}'")
             
             # Check if any titles were missed
-            processed_titles = set(r.get("title") for r in results)
+            processed_titles = {r.get("title") for r in results if r is not None}
             missing_titles = set(titles) - processed_titles
             if missing_titles:
                 logger.warning(f"Some titles were not processed: {missing_titles}")
                 # Process missing titles with rule-based approach
                 for title in missing_titles:
                     if title in title_to_index:
+                        idx = title_to_index[title]
                         logger.info(f"Processing missing title with rule-based approach: '{title}'")
                         rule_based_result = rule_based_relevance_check(title, technology)
-                        results.insert(title_to_index[title], rule_based_result)
+                        results[idx] = rule_based_result
                 
         except Exception as e:
             logger.error(f"Error in LLM processing: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-            # Fall back to simple heuristic for remaining titles
+            # Fall back to simple heuristic for all titles
             logger.info(f"Falling back to rule-based approach for {len(filtered_titles)} titles")
-            for title in filtered_titles:
+            for i, title in enumerate(filtered_titles):
+                idx = title_to_index.get(title, i)
                 rule_based_result = rule_based_relevance_check(title, technology)
-                results.insert(title_to_index[title], rule_based_result)
+                results[idx] = rule_based_result
+    
+    # Filter out any None values (should not happen, but just in case)
+    results = [r for r in results if r is not None]
     
     logger.info(f"Final results: {len(results)} titles processed")
     return {"results": results}
+
+def normalize_tech_name(tech: str) -> str:
+    """Normalize technology names to canonical forms"""
+    tech_lower = tech.lower().strip()
+    
+    # Define technology name mappings
+    mappings = {
+        # JavaScript ecosystem
+        "js": "javascript",
+        "javascript": "javascript",
+        "node": "node.js", 
+        "nodejs": "node.js",
+        "node.js": "node.js",
+        "node js": "node.js",
+        "react": "react",
+        "reactjs": "react",
+        "react.js": "react",
+        "react js": "react",
+        "next": "next.js",
+        "nextjs": "next.js",
+        "next.js": "next.js",
+        "next js": "next.js",
+        "vue": "vue.js",
+        "vuejs": "vue.js",
+        "vue.js": "vue.js",
+        "vue js": "vue.js",
+        "angular": "angular",
+        "angularjs": "angular",
+        "angular.js": "angular",
+        "angular js": "angular",
+        "express": "express.js",
+        "expressjs": "express.js",
+        "express.js": "express.js",
+        "express js": "express.js",
+        "typescript": "typescript",
+        "ts": "typescript",
+        "redux": "redux",
+        
+        # Python ecosystem
+        "python": "python",
+        "py": "python",
+        "django": "django",
+        "flask": "flask",
+        "fastapi": "fastapi",
+        
+        # Databases
+        "mongo": "mongodb",
+        "mongodb": "mongodb",
+        "postgres": "postgresql", 
+        "postgresql": "postgresql",
+        "mysql": "mysql",
+        "redis": "redis",
+        "firebase": "firebase",
+        
+        # Other
+        "docker": "docker",
+        "kubernetes": "kubernetes",
+        "k8s": "kubernetes",
+        "aws": "aws",
+        "azure": "azure",
+        "html": "html",
+        "css": "css",
+        "c#": "c#",
+        "csharp": "c#",
+        "java": "java",
+        "go": "go",
+        "golang": "go",
+        "rust": "rust",
+        "swift": "swift",
+        "kotlin": "kotlin",
+        "php": "php"
+    }
+    
+    # Return the normalized name if found, or the original name if not
+    return mappings.get(tech_lower, tech_lower)
+
+def extract_technologies_from_title(title: str) -> List[str]:
+    """Extract technologies mentioned in a title"""
+    title_lower = title.lower()
+    
+    # Define patterns for common technologies
+    tech_patterns = {
+        # JavaScript ecosystem
+        r"\bjavascript\b|\bjs\b": "javascript",
+        r"\bnode(?:\.js|js)?\b": "node.js",
+        r"\breact(?:\.js|js)?\b": "react",
+        r"\bangular(?:\.js|js)?\b": "angular",
+        r"\bexpress(?:\.js|js)?\b": "express.js",
+        r"\bvue(?:\.js|js)?\b": "vue.js",
+        r"\btypescript\b|\bts\b": "typescript",
+        r"\bnext(?:\.js|js)?\b": "next.js",
+        r"\bredux\b": "redux",
+        
+        # Python ecosystem
+        r"\bpython\b|\bpy\b": "python",
+        r"\bdjango\b": "django",
+        r"\bflask\b": "flask",
+        r"\bfastapi\b": "fastapi",
+        
+        # Databases
+        r"\bmongo(?:db)?\b": "mongodb",
+        r"\bpostgres(?:ql)?\b": "postgresql",
+        r"\bmysql\b": "mysql",
+        r"\bredis\b": "redis",
+        r"\bfirebase\b": "firebase",
+        
+        # Web technologies
+        r"\bhtml\b": "html",
+        r"\bcss\b": "css",
+        r"\bsass\b|\bscss\b": "sass",
+        
+        # DevOps and cloud
+        r"\bdocker\b": "docker",
+        r"\bkubernetes\b|\bk8s\b": "kubernetes",
+        r"\baws\b|\bamazon web services\b": "aws",
+        r"\bazure\b|\bmicrosoft azure\b": "azure",
+        r"\bgcp\b|\bgoogle cloud\b": "gcp",
+        r"\bci\s*[/-]?\s*cd\b": "ci/cd",
+        r"\bmicroservices?\b": "microservices",
+        
+        # Other programming languages
+        r"\bc#\b|\bcsharp\b": "c#",
+        r"\bjava\b": "java",
+        r"\bruby\b": "ruby",
+        r"\bgo\b|\bgolang\b": "go",
+        r"\brust\b": "rust",
+        r"\bswift\b": "swift",
+        r"\bkotlin\b": "kotlin",
+        r"\bphp\b": "php"
+    }
+    
+    extracted_techs = []
+    
+    # Check each pattern against the title
+    for pattern, tech in tech_patterns.items():
+        if re.search(pattern, title_lower):
+            normalized_tech = normalize_tech_name(tech)
+            if normalized_tech not in extracted_techs:
+                extracted_techs.append(normalized_tech)
+    
+    return extracted_techs
 
 def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
     """
@@ -423,41 +563,22 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
     tech_lower = technology.lower()
     title_lower = title.lower()
     
-    # Define common technology name variations
-    tech_variations = {
-        "react": ["react", "reactjs", "react.js", "react js"],
-        "javascript": ["javascript", "js"],
-        "typescript": ["typescript", "ts"],
-        "python": ["python", "py"],
-        "node": ["node", "nodejs", "node.js", "node js"],
-        "angular": ["angular", "angularjs", "angular.js", "angular js"],
-        "mongodb": ["mongodb", "mongo"],
-        "postgresql": ["postgresql", "postgres"],
-        "css": ["css", "cascading style sheets"],
-        "html": ["html", "hypertext markup language"],
-        "vue": ["vue", "vuejs", "vue.js", "vue js"]
-    }
+    # Extract technologies from the title using our utility function
+    extracted_technologies = extract_technologies_from_title(title)
+    
+    # Normalize the main technology name
+    normalized_tech = normalize_tech_name(tech_lower)
     
     # Check if the title contains the technology or its variations
-    contains_tech = False
+    contains_tech = normalized_tech in extracted_technologies
     
-    # First, normalize the technology name
-    normalized_tech = tech_lower
-    for main_tech, variations in tech_variations.items():
-        if tech_lower in variations:
-            normalized_tech = main_tech
-            break
-    
-    # Then check if the title contains the technology or any of its variations
-    if normalized_tech in tech_variations:
-        for variation in tech_variations[normalized_tech]:
-            if variation in title_lower:
-                contains_tech = True
-                break
-    else:
-        # If technology doesn't have defined variations, check for direct match
+    # If not found directly, try to check using basic substring matching
+    if not contains_tech:
+        # Use the original detection approach as a fallback
         contains_tech = tech_lower in title_lower
-    
+        if contains_tech and normalized_tech not in extracted_technologies:
+            extracted_technologies.append(normalized_tech)
+                   
     # Check for educational indicators
     educational_terms = [
         "tutorial", "course", "learn", "complete", "mastering", "beginner", 
@@ -483,7 +604,7 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         "hindi", "english", "spanish", "french", "german", "russian"
     ]
     
-    contains_language = any(indicator in title_lower for indicator in language_indicators)
+    contains_language = any(indicator in title_lower for term in language_indicators)
     
     # Check for quality educational channels
     quality_channels = [
@@ -554,6 +675,8 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         is_relevant = True
         confidence = 0.9
         explanation = "Title contains technology 'React', from quality channel 'Chai', includes projects"
+        if "react" not in extracted_technologies:
+            extracted_technologies.append("react")
     
     if "wscube tech" in title_lower and normalized_tech in title_lower:
         is_relevant = True
@@ -564,7 +687,8 @@ def rule_based_relevance_check(title: str, technology: str) -> Dict[str, Any]:
         "title": title,
         "isRelevant": is_relevant,
         "similarity": confidence,
-        "explanation": explanation
+        "explanation": explanation,
+        "technologies": extracted_technologies
     }
 
 @app.on_event("startup")

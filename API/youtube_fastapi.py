@@ -495,6 +495,11 @@ async def find_best_playlist_endpoint(
                         except (ValueError, TypeError):
                             logger.info(f"    - {key}: +{value}")
                 
+                # Log technology information if available from relevance check
+                if relevance_check and 'technologies' in relevance_check and relevance_check['technologies']:
+                    technologies = relevance_check['technologies']
+                    logger.info(f"  Technologies detected: {', '.join(technologies)}")
+                
                 # Log if this is an exceptional playlist (that might stop the search)
                 if score >= 8.0:
                     logger.info(f"⭐ EXCEPTIONAL playlist found! Search may stop early.")
@@ -536,12 +541,19 @@ async def find_best_playlist_endpoint(
             winning_score = cleaned_result.get("score", 0)
             winning_verdict = cleaned_result.get("verdict", "Unknown")
             
+            # Extract technologies from result (new feature)
+            technologies = cleaned_result.get("technologies", [])
+            
             # Log the best playlist details
             logger.info(f"Best playlist found in {elapsed_time:.2f}s: '{winning_playlist.get('title', 'Unknown')}'")
             logger.info(f"URL: {winning_playlist.get('url', 'Unknown')}")
             logger.info(f"Channel: {winning_playlist.get('channel', {}).get('name', 'Unknown')}")
             logger.info(f"Videos: {len(winning_playlist.get('videos', []))}")
             logger.info(f"Score: {winning_score}/10.0 - Verdict: {winning_verdict}")
+            
+            # Log technologies if available
+            if technologies:
+                logger.info(f"Technologies: {', '.join(technologies)}")
             
             # Log the scoring breakdown
             if "details" in cleaned_result:
@@ -558,7 +570,7 @@ async def find_best_playlist_endpoint(
                 "elapsed_seconds": elapsed_time,
                 "playlists_evaluated": current_playlist_index,
                 "parallel_processing": True,
-            "playlist": {
+                "playlist": {
                     "id": winning_playlist.get("id"),
                     "title": winning_playlist.get("title"),
                     "url": winning_playlist.get("url"),
@@ -571,7 +583,8 @@ async def find_best_playlist_endpoint(
                 },
                 "score": winning_score,
                 "verdict": winning_verdict,
-                "details": cleaned_result.get("details", {})
+                "details": cleaned_result.get("details", {}),
+                "technologies": technologies
             }
             
             # Process videos (with optional limit)
