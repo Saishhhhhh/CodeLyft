@@ -14,6 +14,20 @@ from datetime import datetime
 import http.client
 import ssl
 import time  # Add time module for sleep
+import requests  # Add requests library for modern HTTP requests
+import random
+import concurrent.futures
+import traceback  # Add traceback for error handling
+from urllib.parse import urlparse, parse_qs
+
+# Import relevance checker for batch processing
+try:
+    from relevance_checker import check_batch_relevance
+except ImportError:
+    print("Warning: relevance_checker module not found. Relevance checking will be unavailable.")
+    def check_batch_relevance(titles, query):
+        print("Relevance checking unavailable: relevance_checker module not found")
+        return None
 
 # Try to import dotenv for .env file support
 try:
@@ -33,31 +47,7 @@ except ImportError:
     print("Note: Advanced playlist functionality unavailable. Using fallback methods.")
     HAS_CUSTOM_PLAYLIST = False
 
-# Groq API settings for semantic relevance checking
-GROQ_API_KEYS = [
-    os.environ.get("GROQ_API_KEY_1", ""),
-    os.environ.get("GROQ_API_KEY_2", ""),
-    os.environ.get("GROQ_API_KEY_3", ""),
-    os.environ.get("GROQ_API_KEY_4", ""),
-    os.environ.get("GROQ_API_KEY_5", ""),
-    os.environ.get("GROQ_API_KEY_6", ""),
-    os.environ.get("GROQ_API_KEY_7", "")
-]
-
-# Filter out empty keys
-GROQ_API_KEYS = [key for key in GROQ_API_KEYS if key]
-
-current_key_index = 0
-GROQ_API_HOST = "api.groq.com"
-USE_GROQ = len(GROQ_API_KEYS) > 0
-GROQ_RATE_LIMIT_DELAY = 1  # Delay in seconds when hitting rate limit
-GROQ_MAX_RETRIES = 3  # Maximum number of retries for rate-limited requests
-
-def get_next_groq_api_key():
-    """Get the next available Groq API key"""
-    global current_key_index
-    current_key_index = (current_key_index + 1) % len(GROQ_API_KEYS)
-    return GROQ_API_KEYS[current_key_index]
+# Using batch processing with Groq LLM for relevance checking
 
 # ===== UTILITY FUNCTIONS =====
 
@@ -134,7 +124,7 @@ def check_yt_dlp():
     except (subprocess.SubprocessError, FileNotFoundError):
         return False
 
-def search_youtube(query, limit=10, content_type=None, min_duration=None, max_duration=None):
+def search_youtube(query, limit=8, content_type=None, min_duration=None, max_duration=None):
     """Search for videos or playlists on YouTube with filters"""
     # Try yt-dlp first (best results)
     if check_yt_dlp():
@@ -995,79 +985,155 @@ def search_playlists(query, limit=10):
             "error": str(e)
         }
 
-def find_best_playlist(query, debug=False, detailed_fetch=False):
+def check_batch_title_relevance(titles, query):
     """
-    Find the best playlist for a specific topic based on comprehensive scoring criteria
+    Use batch processing with Groq LLM to check if multiple titles are relevant to the search query
     
     Args:
-        query: Search query for the topic
-        debug: If True, print detailed scoring info
-        detailed_fetch: If True, fetch more details for more accurate scoring
+        titles: List of titles to check
+        query: Search query (technology/topic)
         
     Returns:
-        dict: Best playlist with scores and details or None if no suitable playlist found
+        dict: Results from batch processing or None if API fails
     """
-    if debug:
-        print(f"\n🔍 Searching for best playlist on: '{query}'")
-        
-    if not query or query.strip() == "":
-        if debug:
-            print("Empty query provided. Cannot search for playlists.")
-        return None
-        
-        # Step 1: Get multiple playlists related to the query
     try:
-        search_results = search_playlists(query, limit=12)
-        playlists = search_results.get("results", [])
+        # Extract technology name from query pattern like "Complete React JS Course"
+        query_lower = query.lower()
+        technology = None
         
-        if not playlists:
-            if debug:
-                print("No playlists found for this query.")
-            return None
+        # Try to extract technology from common patterns
+        if "complete" in query_lower and "course" in query_lower:
+            # Pattern: "Complete X Course" - extract X
+            parts = query_lower.replace("complete", "").replace("course", "").strip().split()
+            if parts:
+                # Join remaining words as the technology name
+                technology = " ".join(parts)
+                print(f"Extracted technology from query '{query}': '{technology}'")
+        
+        # If we couldn't extract a technology, use the full query
+        if not technology:
+            print(f"Using full query for relevance checking: '{query}'")
+            technology = query
             
-        if debug:
-            print(f"Found {len(playlists)} playlists for query: '{query}'")
+        # Use our relevance checker module for batch processing
+        result = check_batch_relevance(titles, technology)
+        return result
     except Exception as e:
-        if debug:
-            print(f"Error searching for playlists: {e}")
+        print(f"Error checking batch title relevance: {e}")
         return None
+
+def find_best_playlist(query, debug=False, detailed_fetch=False):
+    """
+    Find the best educational playlist for a given query
     
-    scored_playlists = []
-    max_evaluation_attempts = 6  # Limit evaluation attempts to 6 playlists
+    Args:
+        query (str): The search query
+        debug (bool, optional): Enable debug output. Defaults to False.
+        detailed_fetch (bool, optional): Fetch detailed information for more videos. Defaults to False.
+        
+    Returns:
+        dict: Best playlist with score and details
+    """
+    print(f"Finding best playlist for: {query}")
     
-    # Import ThreadPoolExecutor for parallel processing
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import threading
+    # Search for playlists
+    playlists_response = search_playlists(query, limit=10)
     
-    # Create a lock for thread-safe operations
-    score_lock = threading.Lock()
-    exceptional_found_lock = threading.Lock()
-    exceptional_found = False
+    if not playlists_response or 'results' not in playlists_response:
+        print("No playlists found")
+        return None
+        
+    playlists = playlists_response['results']
+        
+    if not playlists:
+        print("No playlists found")
+        return None
+            
+    print(f"Found {len(playlists)} playlists")
     
-    # Define a function to evaluate a single playlist
+    # Create a list of playlist summaries for parallel processing
+    playlist_summaries = []
+    
+    for idx, playlist in enumerate(playlists):
+        playlist_id = playlist.get('id')
+        playlist_url = playlist.get('url')
+        playlist_title = playlist.get('title')
+        
+        # Skip playlists with missing data
+        if not playlist_id or not playlist_url or not playlist_title:
+            continue
+            
+        # Create a summary object with basic info
+        summary = {
+            'id': playlist_id,
+            'url': playlist_url,
+            'title': playlist_title,
+            'channel': playlist.get('channel', {}),
+            'channel_url': playlist.get('channel_url'),
+            'video_count': playlist.get('video_count', 0),
+            'direct_view_count': 0,  # Will be populated later
+            'direct_view_count_formatted': "0",
+            'idx': idx  # Store original index
+        }
+        
+        playlist_summaries.append(summary)
+    
+    # Check if we have any valid playlists
+    if not playlist_summaries:
+        print("No valid playlists found")
+        return None
+        
+    # Use batch processing to check title relevance for all playlists at once
+    try:
+        titles = [summary['title'] for summary in playlist_summaries]
+        batch_result = check_batch_title_relevance(titles, query)
+        
+        if batch_result and 'results' in batch_result:
+            # Create a map of title to relevance result
+            title_relevance_map = {}
+            for result in batch_result['results']:
+                title_relevance_map[result['title']] = result
+            
+            # Add relevance information to each playlist summary
+            for summary in playlist_summaries:
+                result = title_relevance_map.get(summary['title'])
+                if result:
+                    summary['relevance_check'] = {
+                        'is_relevant': result['isRelevant'],
+                        'similarity': result['similarity'],
+                        'explanation': result['explanation']
+                    }
+                else:
+                    # Fallback for titles not found in results
+                    summary['relevance_check'] = {
+                        'is_relevant': False,
+                        'similarity': 0.0,
+                        'explanation': "Title not found in batch results"
+                    }
+        else:
+            print("Batch relevance check failed, proceeding without relevance filtering")
+    except Exception as e:
+        print(f"Error in batch relevance checking: {e}")
+        print("Proceeding without relevance filtering")
+    
+    # Function to evaluate a playlist in parallel
     def evaluate_playlist(playlist_summary, idx):
-        nonlocal exceptional_found
+        try:
+            # Always print basic info regardless of debug flag
+            print(f"\n📑 Evaluating playlist {idx+1}: {playlist_summary['title']}")
         
-        # Check if we should skip due to exceptional playlist already found
-        with exceptional_found_lock:
-            if exceptional_found:
-                if debug:
-                    print(f"Skipping playlist {idx+1} as exceptional playlist already found")
-                return None
-        
-        if debug:
-            print(f"\n📑 Evaluating playlist {idx+1}/{len(playlists[:max_evaluation_attempts])}: {playlist_summary['title']}")
-        
-        playlist_id = playlist_summary['id']
+            playlist_id = playlist_summary['id']
         
         # Get detailed playlist information with videos
-        try:
             # Determine how many videos to fetch detailed info for
-            # If detailed_fetch is True, fetch more details for better scoring
             max_details_count = 5 if detailed_fetch else 1
+            
+            print(f"Fetching playlist data for ID: {playlist_id}")
             
             # Fetch playlist data
             playlist = get_playlist_videos(playlist_id, limit=0, max_details=max_details_count)
+            
+            print(f"Playlist data fetched. Has videos: {bool(playlist.get('videos'))}")
             
             # Handle playlist title repetition
             if "title" in playlist and '\n' in playlist["title"]:
@@ -1076,99 +1142,102 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
             videos = playlist.get("videos", [])
             
             # Note about video count but don't skip
-            if len(videos) < 5 and debug:
+            if len(videos) < 5:
                 print(f"⚠️ Note: This playlist has fewer videos than recommended ({len(videos)}/5 minimum)")
                 
-            # First, check title relevance with Groq before full scoring
-            if USE_GROQ and debug:
-                print(f"Checking title relevance with Groq: '{playlist['title']}'")
-                
-            groq_result = check_title_relevance_with_groq(playlist["title"], query) if USE_GROQ else None
+            # Check if we have relevance information from batch processing
+            relevance_check = playlist_summary.get('relevance_check')
             
-            if groq_result:
-                is_relevant, confidence, explanation = groq_result
+            if relevance_check:
+                is_relevant = relevance_check.get('is_relevant', False)
+                explanation = relevance_check.get('explanation', 'No explanation provided')
                 
                 # Enhanced logging for relevance check
-                if debug:
-                    print(f"Groq relevance check: {is_relevant} (confidence: {confidence:.2f})")
-                    print(f"  Explanation: {explanation}")
-                    print(f"  IMPORTANT - Is this playlist relevant to '{query}'? {'YES' if is_relevant else 'NO'}")
+                print(f"Batch relevance check: {is_relevant}")
+                print(f"  Explanation: {explanation}")
+                print(f"  IMPORTANT - Is this playlist relevant to '{query}'? {'YES' if is_relevant else 'NO'}")
                 
-                # Early rejection: Skip this playlist if Groq says it's not relevant
+                # Skip non-relevant playlists entirely
                 if not is_relevant:
-                    if debug:
-                        print(f"❌ Skipping: Groq determined this playlist is not relevant to '{query}'")
-                        print(f"   Reason: {explanation}")
+                    print(f"⚠️ Warning: Relevance check determined this playlist is not relevant")
+                    print(f"   Reason: {explanation}")
+                    print(f"   Skipping this playlist")
                     return None
+            else:
+                print("No relevance check information available")
+            
+            print("Applying scoring criteria...")
+            
+            # Apply scoring criteria - pass the pre-computed relevance_check
+            score, details = score_playlist(playlist, query, debug, relevance_check)
+            
+            print(f"Score result: {score}")
                 
-            # Step 3: Apply scoring criteria
-            try:
-                score, details = score_playlist(playlist, query, debug)
-                
-                if score is not None:
-                    result = {
-                        "playlist": playlist,
-                        "score": score,
-                        "details": details,
-                        "verdict": get_verdict(score)
-                    }
+            if score is not None:
+                result = {
+                    "playlist": playlist,
+                    "score": score,
+                    "original_score": score,
+                    "relevance_penalty": 0.0,
+                    "details": details,
+                    "verdict": get_verdict(score)
+                }
                     
-                    # Thread-safe update of scored_playlists
-                    with score_lock:
-                        scored_playlists.append(result)
-                    
-                    if debug:
-                        print(f"✅ Final Score: {score:.1f}/10.0")
-                    
-                    # If we find an exceptional playlist, mark it so other threads can stop
-                    if score >= 8.0:
-                        if debug:
-                            print(f"🔥 Found EXCEPTIONAL playlist! Notifying other threads.")
-                        with exceptional_found_lock:
-                            exceptional_found = True
+                print(f"✅ Final Score: {score:.1f}/10.0")
                         
-                        return result
-            except Exception as e:
-                if debug:
-                    print(f"Error scoring playlist: {e}")
-                    import traceback
-                    traceback.print_exc()
+                return result
+            else:
+                print("❌ Score is None - playlist failed scoring criteria")
+            
                 return None
         except Exception as e:
-            if debug:
-                print(f"Error evaluating playlist {playlist_id}: {e}")
-                import traceback
-                traceback.print_exc()
+            print(f"Error evaluating playlist {playlist_id}: {e}")
+            traceback.print_exc()
             return None
     
-    # Step 2: Evaluate playlists in parallel
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        # Submit tasks for each playlist (limited to max_evaluation_attempts)
+    # Use ThreadPoolExecutor for parallel processing
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit tasks for each playlist
         future_to_playlist = {
-            executor.submit(evaluate_playlist, playlist, i): (playlist, i) 
-            for i, playlist in enumerate(playlists[:max_evaluation_attempts])
+            executor.submit(evaluate_playlist, summary, i): summary 
+            for i, summary in enumerate(playlist_summaries)
         }
         
         # Process results as they complete
-        for future in as_completed(future_to_playlist):
-            playlist_info, idx = future_to_playlist[future]
+        scored_playlists = []
+        exceptional_playlist = None
+        
+        for future in concurrent.futures.as_completed(future_to_playlist):
+            summary = future_to_playlist[future]
             try:
                 result = future.result()
-                # Result is already added to scored_playlists in the evaluate_playlist function
-                
-                # Check if we should cancel remaining tasks due to exceptional playlist
-                if exceptional_found:
-                    if debug:
-                        print(f"Exceptional playlist found. Cancelling remaining evaluations.")
-                    # Cancel any pending futures
-                    for f in future_to_playlist:
-                        if not f.done() and not f.running():
-                            f.cancel()
+                if result:
+                    scored_playlists.append(result)
+                    
+                    # Check if this is an exceptional playlist (score >= 8.0, which is 80% of 10.0)
+                    if result["score"] >= 8.0:
+                        # If we already have an exceptional playlist, keep the one with higher score
+                        if exceptional_playlist is None or result["score"] > exceptional_playlist["score"]:
+                            exceptional_playlist = result
+                            print(f"\n🌟 Found exceptional playlist: {result['playlist']['title']} (Score: {result['score']:.1f}/10.0)")
+                            # Cancel remaining tasks if we have an exceptional playlist
+                            for f in list(future_to_playlist.keys()):
+                                if not f.done() and not f.running():
+                                    f.cancel()
             except Exception as e:
                 if debug:
-                    print(f"Error processing result for playlist {idx+1}: {e}")
+                    print(f"Error processing result for playlist {summary['title']}: {e}")
     
-    # Step 4: Sort playlists by score and return the best one
+    # Return the exceptional playlist if found, otherwise sort and return the best one
+    if exceptional_playlist:
+        if debug:
+            print(f"\n🏆 BEST PLAYLIST (Exceptional): {exceptional_playlist['playlist']['title']}")
+            print(f"Score: {exceptional_playlist['score']:.1f}/10.0")
+            print(f"Verdict: {exceptional_playlist['verdict']}")
+            print(f"URL: {exceptional_playlist['playlist']['url']}")
+        return exceptional_playlist
+    
+    # Sort playlists by score and return the best one if no exceptional playlist was found
     if scored_playlists:
         # Sort by score descending
         scored_playlists.sort(key=lambda x: x["score"], reverse=True)
@@ -1184,278 +1253,24 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
             if len(scored_playlists) > 1:
                 print("\n🥈 Runner-up playlists:")
                 for i, p in enumerate(scored_playlists[1:4]):
-                    print(f"{i+2}. {p['playlist']['title']} - Score: {p['score']:.1f} - {p['verdict']}")
+                    print(f"{i+2}. {p['playlist']['title']} - Score: {p['score']:.1f}/10.0 - {p['verdict']}")
         
-        # Only return if meets minimum acceptable criteria
-        if best["score"] >= 6.0:
-            return best
-        elif debug:
-            print("\n⚠️ No playlists met the minimum score requirement of 6.0")
+        # Return the best playlist regardless of score
+        return best
     elif debug:
         print("\n❌ No playlists could be properly evaluated.")
     
     return None
 
-def check_title_relevance_with_groq(title, query):
-    """
-    Use Groq LLM API to check if a playlist title is relevant to the search query
-    
-    Args:
-        title: Playlist title to check
-        query: Search query (technology/topic)
-        
-    Returns:
-        tuple: (is_relevant, confidence, explanation)
-    """
-    if not USE_GROQ:
-        print("Groq API key not set. Using fallback relevance checking.")
-        return None
-        
-    retry_count = 0
-    current_key = GROQ_API_KEYS[current_key_index]
-    
-    while retry_count < GROQ_MAX_RETRIES:
-        try:
-            # Set up SSL context for HTTPS
-            context = ssl._create_unverified_context()
-            conn = http.client.HTTPSConnection(GROQ_API_HOST, context=context)
-            
-            # Extract the main topic from the query
-            main_topic = None
-            query_terms = query.lower().split()
-            for term in query_terms:
-                if term not in ["complete", "full", "course", "tutorial", "for", "beginners", "advanced", "learn", "the"]:
-                    main_topic = term
-                    break
-            
-            # Prepare the prompt
-            prompt = f"""Analyze if this YouTube playlist title is SPECIFICALLY relevant to the technology/topic.
-
-Playlist title: "{title}"
-User search query: "{query}"
-Main topic: "{main_topic}"
-
-Rules:
-1. The title MUST contain the SPECIFIC technology/topic name or a common abbreviation (e.g., CSS for Cascading Style Sheets).
-2. General web development courses are NOT relevant for specific topics like CSS, JavaScript, React, etc.
-3. For a CSS query, the playlist should be specifically about CSS, not general web development.
-4. Reject titles that are too broad when the query is for a specific technology.
-5. Be STRICT - only accept playlists that are clearly focused on the main topic.
-
-Return JSON with these fields:
-- is_relevant: true/false
-- confidence: number from 0-1
-- explanation: brief reasoning for decision
-"""
-
-            print(f"DEBUG - GROQ RELEVANCE CHECK PROMPT:")
-            print(f"========================================")
-            print(prompt)
-            print(f"========================================")
-            
-            # Set up headers
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {current_key}"
-            }
-            
-            # Create payload
-            payload = json.dumps({
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "model": "llama3-70b-8192",
-                "temperature": 0.2,
-                "response_format": {"type": "json_object"}
-            })
-            
-            # Send request
-            conn.request("POST", "/openai/v1/chat/completions", payload, headers)
-            response = conn.getresponse()
-            
-            # For any HTTP error, retry with a different API key
-            if response.status != 200:
-                print(f"Error from Groq API: {response.status} {response.reason}")
-                retry_count += 1
-                if retry_count < GROQ_MAX_RETRIES:
-                    print(f"Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
-                    current_key = get_next_groq_api_key()
-                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
-                    continue
-                else:
-                    print("Max retries reached for Groq API. Using fallback relevance checking.")
-                return None
-                
-            # Parse response
-            data = json.loads(response.read().decode())
-            try:
-                content = data["choices"][0]["message"]["content"]
-                
-                print(f"DEBUG - GROQ RELEVANCE CHECK RESPONSE:")
-                print(f"========================================")
-                print(content)
-                print(f"========================================")
-                
-                result = json.loads(content)
-                
-                is_relevant = result.get("is_relevant", False)
-                confidence = result.get("confidence", 0.0)
-                explanation = result.get("explanation", "No explanation provided")
-                
-                print(f"DEBUG - FINAL RELEVANCE DECISION: {'RELEVANT' if is_relevant else 'NOT RELEVANT'} (confidence: {confidence:.2f})")
-                
-                return (is_relevant, confidence, explanation)
-            except (json.JSONDecodeError, KeyError, IndexError) as e:
-                print(f"Error parsing Groq response: {e}")
-                retry_count += 1
-                if retry_count < GROQ_MAX_RETRIES:
-                    print(f"Response parsing error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
-                    current_key = get_next_groq_api_key()
-                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)
-                    continue
-                return None
-                
-        except Exception as e:
-            print(f"Error calling Groq API: {e}")
-            retry_count += 1
-            if retry_count < GROQ_MAX_RETRIES:
-                print(f"Network or other error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
-                current_key = get_next_groq_api_key()
-                time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)
-                continue
-            return None
-            
-    return None
-
-def evaluate_playlist_with_groq(playlist, query):
-    """
-    Use Groq LLM to evaluate the overall quality of the playlist content
-    
-    Args:
-        playlist: Playlist data with videos
-        query: Original search query
-        
-    Returns:
-        float: Score from 0-2 points
-    """
-    if not USE_GROQ or not GROQ_API_KEYS:
-        print("Groq API key not set. Cannot evaluate playlist quality.")
-        return 0
-        
-    retry_count = 0
-    current_key = GROQ_API_KEYS[current_key_index]
-    
-    while retry_count < GROQ_MAX_RETRIES:
-        try:
-            # Get information for evaluation
-            title = playlist.get("title", "")
-            # Handle multi-line titles
-            if '\n' in title:
-                title = title.split('\n')[0].strip()
-                
-            video_count = len(playlist.get("videos", []))
-            first_video_title = playlist.get("videos", [{}])[0].get("title", "") if playlist.get("videos") else ""
-            video_titles = [v.get("title", "") for v in playlist.get("videos", [])[:5]]  # First 5 video titles
-            
-            # Set up SSL context for HTTPS
-            context = ssl._create_unverified_context()
-            conn = http.client.HTTPSConnection(GROQ_API_HOST, context=context)
-            
-            # Prepare the prompt
-            prompt = f"""You are evaluating a YouTube playlist about "{query}" to determine its educational quality.
-
-Playlist Information:
-- Title: "{title}"
-- Video Count: {video_count}
-- First Video: "{first_video_title}"
-- Sample video titles: {', '.join([f'"{t}"' for t in video_titles])}
-
-Based ONLY on these titles, score this playlist from 0-2 on its likely educational value:
-- 2.0: Outstanding educational value with comprehensive, professional content
-- 1.5: High quality educational content with good structure and depth  
-- 1.0: Average educational content, sufficient but not exceptional
-- 0.5: Basic content with limited depth or inconsistent quality
-- 0.0: Poor educational value or appears to be low effort content
-
-Return ONLY a JSON with:
-- score: numeric value from 0-2 (can use .5 increments)
-- explanation: brief reason for the score
-"""
-            
-            # Set up headers
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {current_key}"
-            }
-            
-            # Create payload
-            payload = json.dumps({
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "model": "llama3-70b-8192",
-                "temperature": 0.2,
-                "response_format": {"type": "json_object"}
-            })
-            
-            # Send request
-            conn.request("POST", "/openai/v1/chat/completions", payload, headers)
-            response = conn.getresponse()
-            
-            # Handle HTTP errors - for any error code, retry with a different API key
-            if response.status != 200:
-                error_message = f"Error from Groq API: {response.status} {response.reason}"
-                print(error_message)
-                
-                # Retry with a different API key for any error
-                retry_count += 1
-                if retry_count < GROQ_MAX_RETRIES:
-                    print(f"Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
-                    current_key = get_next_groq_api_key()
-                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
-                    continue
-                else:
-                    print("Max retries reached for Groq API. Using fallback evaluation.")
-                    return 1.0  # Default to average score rather than 0
-                
-            # Parse response
-            data = json.loads(response.read().decode())
-            
-            try:
-                content = data["choices"][0]["message"]["content"]
-                result = json.loads(content)
-                
-                score = float(result.get("score", 1.0))  # Default to 1.0 (average) if missing
-                explanation = result.get("explanation", "No explanation provided")
-                
-                print(f"Groq evaluation: {score}/2.0 - {explanation}")
-                
-                return min(2.0, max(0.0, score))  # Ensure score is within 0-2 range
-            except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
-                print(f"Error parsing Groq evaluation response: {e}")
-                retry_count += 1
-                if retry_count < GROQ_MAX_RETRIES:
-                    print(f"Response parsing error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
-                    current_key = get_next_groq_api_key()
-                    time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
-                    continue
-                return 1.0  # Default to average score rather than 0
-                
-        except Exception as e:
-            print(f"Error during Groq playlist evaluation: {e}")
-            retry_count += 1
-            if retry_count < GROQ_MAX_RETRIES:
-                print(f"Network or other error. Rotating Groq API key and retrying... (attempt {retry_count+1}/{GROQ_MAX_RETRIES})")
-                current_key = get_next_groq_api_key()
-                time.sleep(GROQ_RATE_LIMIT_DELAY * retry_count)  # Exponential backoff
-                continue
-            return 1.0  # Default to average score rather than 0
-            
-    return 1.0  # Default to average score rather than 0
-
-def score_playlist(playlist, query, debug=False):
+def score_playlist(playlist, query, debug=False, relevance_check=None):
     """
     Score a playlist based on defined criteria
+    
+    Args:
+        playlist: The playlist to score
+        query: The search query
+        debug: Whether to print debug information
+        relevance_check: Pre-computed relevance check result (to avoid redundant API calls)
     
     Returns:
         tuple: (score, details) or (None, None) if fails critical criteria
@@ -1463,8 +1278,18 @@ def score_playlist(playlist, query, debug=False):
     title = playlist.get("title", "")
     videos = playlist.get("videos", [])
     
-    if debug:
-        print(f"Scoring playlist: '{title}' ({len(videos)} videos)")
+    print(f"Scoring playlist: '{title}' ({len(videos)} videos)")
+    
+    # Initialize main_tech_term at the beginning
+    main_tech_term = None
+    query_terms = query.lower().split()
+    tech_terms = ["javascript", "js", "python", "css", "html", "react", "node", "angular", "vue", 
+                "typescript", "ts", "php", "ruby", "java", "c#", "c++", "swift", "kotlin", "go"]
+    
+    for term in query_terms:
+        if term in tech_terms:
+            main_tech_term = term
+            break
     
     total_score = 0
     details = {
@@ -1474,7 +1299,7 @@ def score_playlist(playlist, query, debug=False):
         "duration_ratio_score": 0,
         "recency_score": 0,
         "like_ratio_score": 0,
-        "groq_quality_score": 0,
+        "avg_views_score": 0,
         "first_video_views_score": 0,
         "total_views": 0,
         "total_likes": 0,
@@ -1485,39 +1310,47 @@ def score_playlist(playlist, query, debug=False):
     enhanced_duration = None
     if '_avg_duration_minutes' in playlist:
         enhanced_duration = playlist.get('_avg_duration_minutes')
-        if debug:
-            print(f"Using enhanced duration calculation: {enhanced_duration:.1f} min/video")
+        print(f"Using enhanced duration calculation: {enhanced_duration:.1f} min/video")
         
     # Check for enhanced total duration
     if '_total_duration_minutes' in playlist:
         details["total_duration_minutes"] = playlist.get('_total_duration_minutes')
-        if debug:
-            print(f"Using enhanced total duration: {details['total_duration_minutes']:.1f} minutes")
+        print(f"Using enhanced total duration: {details['total_duration_minutes']:.1f} minutes")
     
     # 🧠 Must-Pass Filter: Title Relevance
     title_relevance = False
     relevance_explanation = ""
     
-    if USE_GROQ:
-        if debug:
-            print(f"Checking title relevance with Groq: '{title}'")
+    # Use the pre-computed relevance check if provided
+    if relevance_check:
+        print(f"Using pre-computed relevance check result")
         
-        groq_result = check_title_relevance_with_groq(title, query)
+        title_relevance = relevance_check.get('is_relevant', False)
+        relevance_explanation = relevance_check.get('explanation', 'No explanation provided')
         
-        if groq_result:
-            is_relevant, confidence, explanation = groq_result
-            title_relevance = is_relevant
-            relevance_explanation = explanation
+        print(f"Pre-computed relevance check: {title_relevance}")
+        print(f"  Explanation: {relevance_explanation}")
+    else:
+        print("No pre-computed relevance check provided, doing a new check")
+        
+        # Check title relevance using batch processing
+        print(f"Checking title relevance: '{title}'")
+        
+        # Use batch relevance checker (this is the redundant call we want to avoid)
+        batch_result = check_batch_title_relevance([title], query)
+        
+        if batch_result and 'results' in batch_result and batch_result['results']:
+            first_result = batch_result['results'][0]
+            title_relevance = first_result['isRelevant']
+            relevance_explanation = first_result['explanation']
             
-            if debug:
-                print(f"Groq relevance check: {title_relevance} (confidence: {confidence:.2f})")
-                print(f"  Explanation: {explanation}")
+            print(f"Batch relevance check: {title_relevance}")
+            print(f"  Explanation: {relevance_explanation}")
         else:
-            # If Groq failed after all retries, fall back to basic matching
-            if debug:
-                print(f"Groq check failed after retries. Falling back to basic relevance matching.")
-            
-            # Fall back to basic matching (same as in the else branch below)
+            # Fall back to basic matching if batch processing fails
+            print(f"Batch relevance check failed. Falling back to basic relevance matching.")
+        
+            # Basic matching approach
             query_terms = query.lower().split()
             title_lower = title.lower()
             
@@ -1552,70 +1385,30 @@ def score_playlist(playlist, query, debug=False):
             
             title_relevance = len(matched_terms) > 0 and relevance_percentage >= 60
             relevance_explanation = f"Matched {len(matched_terms)} terms, {relevance_percentage:.1f}% relevant videos"
-    else:
-        if debug:
-            print("Using basic relevance matching (Groq API not available)")
-        
-        query_terms = query.lower().split()
-        title_lower = title.lower()
-        
-        # Check for query terms in title (partial match)
-        matched_terms = [term for term in query_terms if term in title_lower]
-        
-        # Handle common abbreviations
-        abbrev_map = {
-            "js": "javascript",
-            "py": "python",
-            "ts": "typescript",
-            "react": "reactjs",
-            "vue": "vuejs",
-            "node": "nodejs",
-            "cpp": "c++"
-        }
-        
-        for abbrev, full in abbrev_map.items():
-            if abbrev in title_lower and full in query.lower():
-                matched_terms.append(full)
-            elif full in title_lower and abbrev in query.lower():
-                matched_terms.append(abbrev)
-        
-        # Video titles check (verify most videos are on topic)
-        relevant_videos = 0
-        for video in videos:
-            video_title = video.get("title", "").lower()
-            if any(term in video_title for term in query_terms):
-                relevant_videos += 1
-        
-        relevance_percentage = (relevant_videos / len(videos)) * 100 if videos else 0
-        
-        title_relevance = len(matched_terms) > 0 and relevance_percentage >= 60
-        relevance_explanation = f"Matched {len(matched_terms)} terms, {relevance_percentage:.1f}% relevant videos"
     
     details["title_relevance"] = title_relevance
     
     if not title_relevance:
-        if debug:
-            print(f"❌ Failed title relevance check: {relevance_explanation}")
+        print(f"❌ Failed title relevance check: {relevance_explanation}")
         return None, None
-    elif debug:
+    else:
         print(f"✓ Passed title relevance check: {relevance_explanation}")
     
     # Ensure we have at least one video
     if len(videos) < 1:
-        if debug:
-            print(f"❌ No videos found in playlist")
+        print(f"❌ No videos found in playlist")
         return None, None
     
-    # 🧮 Start scoring the playlist
+    # 🧮 Start scoring the playlist - NEW SCORING SYSTEM (Total: 10 points)
 
-    # 🔢 Video Count (0.5 to 1.5 points)
+    # 3. Video Count (1.5 pts)
     video_count = len(videos)
-    if video_count > 20:
-        video_count_score = 1.5
-    elif video_count > 10:
-        video_count_score = 1.0
-    else:  # 1-10 videos
-        video_count_score = 0.5
+    if video_count >= 10:
+        video_count_score = 1.5  # Ideal range (above 10 videos)
+    elif video_count >= 5:
+        video_count_score = 1.0  # 5-9 videos
+    else:
+        video_count_score = 0.5  # <5 videos
     
     details["video_count_score"] = video_count_score
     total_score += video_count_score
@@ -1623,7 +1416,7 @@ def score_playlist(playlist, query, debug=False):
     if debug:
         print(f"+ Video count ({video_count} videos): +{video_count_score:.1f} points")
     
-    # 👀 Total Playlist Views (0 to 1.5 points)
+    # 2. Total Playlist Views (1.8 pts)
     total_views_score = 0
     
     # Try to get direct playlist views first
@@ -1638,11 +1431,13 @@ def score_playlist(playlist, query, debug=False):
     details["total_views"] = direct_view_count
     
     if direct_view_count >= 1000000:
-        total_views_score = 1.5
+        total_views_score = 1.8  # 1M views → 1.8
     elif direct_view_count >= 500000:
-        total_views_score = 1.0
+        total_views_score = 1.5  # 500k-999k → 1.5
     elif direct_view_count >= 100000:
-        total_views_score = 0.5
+        total_views_score = 1.0  # 100k-499k → 1.0
+    else:
+        total_views_score = 0.5  # <100k → 0.5
     
     details["total_views_score"] = total_views_score
     total_score += total_views_score
@@ -1650,7 +1445,30 @@ def score_playlist(playlist, query, debug=False):
     if debug:
         print(f"+ Total views ({format_number(direct_view_count)}): +{total_views_score:.1f} points")
     
-    # ⏱ Total Duration vs Count (1.0 to 2.0 points)
+    # 4. Average Views per Video (1.4 pts)
+    avg_views_score = 0
+    avg_views_per_video = 0
+    
+    if video_count > 0 and direct_view_count > 0:
+        avg_views_per_video = direct_view_count / video_count
+        
+        if avg_views_per_video >= 100000:
+            avg_views_score = 1.4  # 100k → 1.4
+        elif avg_views_per_video >= 50000:
+            avg_views_score = 1.0  # 50k-100k → 1.0
+        elif avg_views_per_video >= 10000:
+            avg_views_score = 0.7  # 10k-50k → 0.7
+        else:
+            avg_views_score = 0.3  # <10k → 0.3
+    
+    details["avg_views_score"] = avg_views_score
+    details["avg_views_per_video"] = avg_views_per_video
+    total_score += avg_views_score
+    
+    if debug:
+        print(f"+ Average views per video ({format_number(avg_views_per_video)}): +{avg_views_score:.1f} points")
+    
+    # 1. Duration Ratio (0 to 2.0 points) - Same as before
     videos_with_duration = [v for v in videos if "duration_seconds" in v and v["duration_seconds"]]
     
     if enhanced_duration is not None:
@@ -1723,7 +1541,7 @@ def score_playlist(playlist, query, debug=False):
         if debug:
             print(f"+ Duration/video ratio: +0.0 points (no duration data)")
     
-    # 📅 First Video Publish Year (0.5 to 1.5 points)
+    # 7. Recency (0.5 pts)
     current_year = datetime.now().year
     recency_score = 0
     publish_year = None
@@ -1806,30 +1624,31 @@ def score_playlist(playlist, query, debug=False):
                 if debug:
                     print(f"Error fetching publish date for first video: {e}")
     
-    # Calculate recency score based on the year
+    # Calculate recency score based on the year - NEW SCALE
     if publish_year:
-        if publish_year >= 2024:  # Current year (2024)
-            recency_score = 1.5
-            if debug:
-                print(f"+ First video publish year ({publish_year} - current year): +{recency_score:.1f} points")
-        elif publish_year >= 2023:  # Last year (2023)
-            recency_score = 1.0
-            if debug:
-                print(f"+ First video publish year ({publish_year} - last year): +{recency_score:.1f} points")
-        else:  # Older content
+        years_diff = current_year - publish_year
+        if years_diff <= 1:  # 0-1 year old
             recency_score = 0.5
             if debug:
-                print(f"+ First video publish year ({publish_year} - older): +{recency_score:.1f} points")
+                print(f"+ First video publish year ({publish_year} - within 1 year): +{recency_score:.1f} points")
+        elif years_diff <= 2:  # 1-2 years old
+            recency_score = 0.3
+            if debug:
+                print(f"+ First video publish year ({publish_year} - 1-2 years old): +{recency_score:.1f} points")
+        else:  # 2+ years old
+            recency_score = 0.1
+            if debug:
+                print(f"+ First video publish year ({publish_year} - older than 2 years): +{recency_score:.1f} points")
     else:  # No year detected
-        recency_score = 0.5  # Default to oldest category
+        recency_score = 0.1  # Default to oldest category
         if debug:
-            print(f"+ First video recency (no year detected): +0.5 points (default)")
+            print(f"+ First video recency (no year detected): +0.1 points (default)")
     
     details["recency_score"] = recency_score
     details["publish_year"] = publish_year  # Store the year for reference
     total_score += recency_score
     
-    # ❤️ Like Ratio of First Video (0 to 0.5 points)
+    # 6. Like Ratio (0.8 pts)
     like_ratio_score = 0
     
     if videos and "likes" in videos[0] and "views" in videos[0] and videos[0]["views"]:
@@ -1837,48 +1656,34 @@ def score_playlist(playlist, query, debug=False):
         like_ratio = (first_video["likes"] / first_video["views"]) * 100
         
         if like_ratio >= 2:
-            like_ratio_score = 0.5
+            like_ratio_score = 0.8  # 2% → 0.8
         elif like_ratio >= 1:
-            like_ratio_score = 0.25
+            like_ratio_score = 0.5  # 1-2% → 0.5
+        else:
+            like_ratio_score = 0.2  # <1% → 0.2
         
         details["like_ratio_score"] = like_ratio_score
         total_score += like_ratio_score
         
         if debug:
-            print(f"+ First video like ratio ({like_ratio:.1f}%): +{like_ratio_score:.2f} points")
+            print(f"+ First video like ratio ({like_ratio:.1f}%): +{like_ratio_score:.1f} points")
     else:
         details["like_ratio_score"] = 0
         if debug:
             print(f"+ First video like ratio: +0.0 points (no data)")
     
-    # 🧠 Groq LLM Playlist Quality Evaluation (0 to 2.0 points)
-    groq_quality_score = 0
-    
-    if USE_GROQ:
-        if debug:
-            print(f"Evaluating playlist educational quality with Groq...")
-            
-        groq_quality_score = evaluate_playlist_with_groq(playlist, query)
-        
-        details["groq_quality_score"] = groq_quality_score
-        total_score += groq_quality_score
-        
-        if debug:
-            print(f"+ Groq quality evaluation: +{groq_quality_score:.1f} points")
-    else:
-        if debug:
-            print(f"+ Groq quality evaluation: +0.0 points (Groq API not available)")
-    
-    # 📈 First Video Views (0 to 1.0 points)
+    # 5. First Video Views (1.0 pts)
     first_video_views_score = 0
     
     if videos and "views" in videos[0]:
         first_video_views = videos[0]["views"]
         
-        if first_video_views >= 100000:
-            first_video_views_score = 1.0
-        elif first_video_views >= 50000:
-            first_video_views_score = 0.5
+        if first_video_views >= 500000:
+            first_video_views_score = 1.0  # 500k → 1.0
+        elif first_video_views >= 100000:
+            first_video_views_score = 0.7  # 100k-500k → 0.7
+        else:
+            first_video_views_score = 0.3  # <100k → 0.3
         
         details["first_video_views_score"] = first_video_views_score
         total_score += first_video_views_score
@@ -1890,7 +1695,10 @@ def score_playlist(playlist, query, debug=False):
         if debug:
             print(f"+ First video views: +0.0 points (no data)")
     
-    # Final score (out of 10)
+    # Note: We no longer apply specificity penalties as non-relevant playlists
+    # are already filtered out at the evaluation stage
+    
+    # Final score (out of 10.0)
     if debug:
         print(f"= TOTAL SCORE: {total_score:.1f}/10.0")
         print(f"= VERDICT: {get_verdict(total_score)}")
@@ -1898,12 +1706,12 @@ def score_playlist(playlist, query, debug=False):
     return total_score, details
 
 def get_verdict(score):
-    """Return the verdict based on the score"""
-    if score >= 8.0:
+    """Return the verdict based on the score (max score is now 10.0)"""
+    if score >= 8.0:  # 80% of 10.0
         return "⭐ EXCEPTIONAL - Use immediately, stop searching"
-    elif score >= 7.0:
+    elif score >= 7.0:  # 70% of 10.0
         return "👍 GOOD - Use unless exceptional one found"
-    elif score >= 6.0:
+    elif score >= 6.0:  # 60% of 10.0
         return "⚠️ AVERAGE - Keep as backup"
     else:
         return "❌ REJECT - Skip playlist"
@@ -2116,7 +1924,7 @@ if __name__ == "__main__":
             print(f"⏱ Duration/Video: +{best_playlist['details']['duration_ratio_score']:.1f}")
             print(f"📅 First Video Recency: +{best_playlist['details']['recency_score']:.1f}")
             print(f"❤️ First Video Like Ratio: +{best_playlist['details']['like_ratio_score']:.2f}")
-            print(f"🧠 Groq Quality Evaluation: +{best_playlist['details'].get('groq_quality_score', 0):.1f}")
+            # Quality evaluation section removed
             print(f"📈 First Video Popularity: +{best_playlist['details']['first_video_views_score']:.1f}")
             
             print(f"\nFinal Score: {best_playlist['score']:.1f}/10.0")

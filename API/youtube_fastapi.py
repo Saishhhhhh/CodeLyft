@@ -6,6 +6,9 @@ import logging
 from datetime import datetime
 import sys
 import types
+import re
+import traceback
+from pydantic import BaseModel
 from Youtube import (
     get_video_details,
     get_playlist_videos,
@@ -13,9 +16,26 @@ from Youtube import (
     search_playlists,
     find_best_playlist as original_find_best_playlist
 )
+import relevance_checker  # Import our new relevance checker module
+import os
+import json
+
+# Import sentence-transformers for technology matching
+try:
+    from sentence_transformers import SentenceTransformer, util
+    HAS_SENTENCE_TRANSFORMERS = True
+except ImportError:
+    HAS_SENTENCE_TRANSFORMERS = False
+    print("Warning: sentence-transformers not installed. Technology matching will be unavailable.")
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
@@ -36,10 +56,52 @@ app.add_middleware(
     max_age=3600,
 )
 
+# Global variables for technology matching
+tech_model = None
+embedding_cache = {}
+SIMILARITY_THRESHOLD = 0.8  # Threshold for considering technologies equivalent
+
+# Technology matching response model
+class TechnologyMatchResponse(BaseModel):
+    areEquivalent: bool
+    similarity: float
+    explanation: str
+
+# Request and response models
+class RelevanceRequest(BaseModel):
+    title: str
+    technology: str
+
+class BatchRelevanceRequest(BaseModel):
+    titles: List[str]
+    technology: str
+
+class RelevanceResponse(BaseModel):
+    isRelevant: bool
+    similarity: float
+    explanation: str
+
+class BatchRelevanceResponse(BaseModel):
+    results: List[Dict[str, Any]]
+
 @app.on_event("startup")
 async def startup_event():
     """Startup event handler"""
+    global tech_model
+    
     logger.info("Starting YouTube API")
+    
+    # Load sentence-transformers model if available
+    if HAS_SENTENCE_TRANSFORMERS:
+        try:
+            logger.info("Loading sentence-transformers model...")
+            tech_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+            logger.info("Sentence transformer model loaded successfully")
+        except Exception as e:
+            logger.error(f"Error loading sentence-transformers model: {e}")
+            tech_model = None
+    else:
+        logger.info("Sentence transformers not available - technology matching disabled")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -71,6 +133,110 @@ def clean_repeated_title(data: Dict[str, Any]) -> Dict[str, Any]:
                 data[i] = clean_repeated_title(item)
     
     return data
+
+# Technology matching utility functions
+def normalize_tech_name(tech_name: str) -> str:
+    """Normalize technology name for better matching"""
+    # Convert to lowercase
+    normalized = tech_name.lower()
+    # Replace common separators with spaces
+    normalized = re.sub(r'[-_./]', ' ', normalized)
+    # Remove any special characters
+    normalized = re.sub(r'[^\w\s]', '', normalized)
+    # Remove extra whitespace
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+def get_embedding(text: str):
+    """Get embedding for text with caching"""
+    global embedding_cache, tech_model
+    
+    # Normalize the text
+    normalized_text = normalize_tech_name(text)
+    
+    # Check if embedding exists in cache
+    if normalized_text in embedding_cache:
+        return embedding_cache[normalized_text]
+    
+    # Generate new embedding
+    if tech_model is None:
+        raise ValueError("Sentence transformer model not loaded")
+    
+    embedding = tech_model.encode(normalized_text)
+    
+    # Cache the embedding
+    embedding_cache[normalized_text] = embedding
+    
+    return embedding
+
+def get_similarity(tech1: str, tech2: str) -> float:
+    """Calculate similarity between two technology names"""
+    # Quick exact match check
+    if tech1.lower() == tech2.lower():
+        return 1.0
+    
+    # Get embeddings
+    try:
+        embedding1 = get_embedding(tech1)
+        embedding2 = get_embedding(tech2)
+        
+        # Calculate cosine similarity
+        similarity = util.cos_sim(embedding1, embedding2).item()
+        
+        return similarity
+    except Exception as e:
+        logger.error(f"Error calculating similarity: {e}")
+        return 0.0  # Return 0 similarity on error
+
+def generate_explanation(tech1: str, tech2: str, similarity: float) -> str:
+    """Generate explanation for the match result"""
+    if similarity >= SIMILARITY_THRESHOLD:
+        if similarity >= 0.8:
+            return f"Very high semantic similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
+        else:
+            return f"Sufficient semantic similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
+    else:
+        return f"Insufficient semantic similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
+
+# Technology matching endpoint
+@app.get("/match", tags=["Technology"], response_model=TechnologyMatchResponse)
+async def match_technologies(
+    tech1: str = Query(..., description="First technology name"),
+    tech2: str = Query(..., description="Second technology name")
+):
+    """Check if two technology names are equivalent using semantic similarity"""
+    if not HAS_SENTENCE_TRANSFORMERS or tech_model is None:
+        raise HTTPException(
+            status_code=503, 
+            detail="Technology matching is unavailable. The sentence-transformers module is not installed or the model failed to load."
+        )
+    
+    try:
+        # Quick check for exact matches
+        if tech1.lower() == tech2.lower():
+            return TechnologyMatchResponse(
+                areEquivalent=True,
+                similarity=1.0,
+                explanation=f"Exact match between '{tech1}' and '{tech2}'"
+            )
+        
+        # Calculate similarity
+        similarity = get_similarity(tech1, tech2)
+        
+        # Determine if technologies are equivalent
+        are_equivalent = similarity >= SIMILARITY_THRESHOLD
+        
+        # Generate explanation
+        explanation = generate_explanation(tech1, tech2, similarity)
+        
+        return TechnologyMatchResponse(
+            areEquivalent=are_equivalent,
+            similarity=similarity,
+            explanation=explanation
+        )
+    except Exception as e:
+        logger.error(f"Error matching technologies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # API Routes - Use Dict[str, Any] for all responses instead of Pydantic models
 @app.get("/video/details", tags=["Video"])
@@ -208,12 +374,12 @@ async def find_best_playlist_endpoint(
         # Replace the function temporarily
         Youtube.get_playlist_videos = enhanced_get_playlist_videos
         
-        def score_playlist_with_logging(playlist, query, debug=False):
+        def score_playlist_with_logging(playlist, query, debug=False, relevance_check=None):
             nonlocal current_playlist_index
             current_playlist_index += 1
             
-            # Call the original function
-            score, details = original_score_playlist(playlist, query, debug)
+            # Call the original function with the relevance_check parameter
+            score, details = original_score_playlist(playlist, query, debug, relevance_check)
             
             # Log the result if we have valid data
             if score is not None:
@@ -264,13 +430,13 @@ async def find_best_playlist_endpoint(
                 recency_score = details.get("recency_score", 0.0)
                 if publish_year:
                     if publish_year >= 2024:
-                        recency_score_text = f"Year {publish_year} (current) → +1.5"
+                        recency_score_text = f"Year {publish_year} (current) → +0.5"
                     elif publish_year >= 2023:
-                        recency_score_text = f"Year {publish_year} (last year) → +1.0"
+                        recency_score_text = f"Year {publish_year} (last year) → +0.3"
                     else:
-                        recency_score_text = f"Year {publish_year} (older) → +0.5"
+                        recency_score_text = f"Year {publish_year} (older) → +0.1"
                 else:
-                    recency_score_text = "No year detected → +0.5 (default)"
+                    recency_score_text = "No year detected → +0.1 (default)"
                 
                 # Get like/view ratio information
                 first_video_likes = 0
@@ -284,12 +450,12 @@ async def find_best_playlist_endpoint(
                     like_ratio = (first_video_likes / first_video_views) * 100 if first_video_views > 0 else 0
                     
                     # Generate like ratio score text
-                    if like_ratio >= 4:
-                        like_ratio_text = f"{like_ratio:.2f}% ≥ 4% → +0.5"
-                    elif like_ratio >= 2:
-                        like_ratio_text = f"{like_ratio:.2f}% ≥ 2% → +0.25"
+                    if like_ratio >= 2:
+                        like_ratio_text = f"{like_ratio:.2f}% ≥ 2% → +0.8"
+                    elif like_ratio >= 1:
+                        like_ratio_text = f"{like_ratio:.2f}% ≥ 1% → +0.5"
                     else:
-                        like_ratio_text = f"{like_ratio:.2f}% < 2% → +0.0"
+                        like_ratio_text = f"{like_ratio:.2f}% < 1% → +0.2"
                 else:
                     like_ratio_text = "No like/view data → +0.0"
                 
@@ -448,7 +614,6 @@ async def find_best_playlist_endpoint(
             
     except Exception as e:
         # Log the full error with traceback
-        import traceback
         error_trace = traceback.format_exc()
         logger.error(f"Error in find_best_playlist endpoint: {str(e)}")
         logger.error(f"Traceback: {error_trace}")
@@ -464,9 +629,72 @@ async def find_best_playlist_endpoint(
             }
         )
 
+@app.post("/check-relevance", tags=["Relevance"], response_model=RelevanceResponse)
+async def check_title_relevance(request: RelevanceRequest):
+    """
+    Check if a title is relevant to a technology using semantic similarity
+    
+    This endpoint uses sentence-transformers to compare the title against good and bad examples
+    """
+    try:
+        # Use our relevance checker module
+        result = relevance_checker.check_relevance(request.title, request.technology)
+        
+        return RelevanceResponse(
+            isRelevant=result["isRelevant"],
+            similarity=result["similarity"],
+            explanation=result["explanation"]
+        )
+    except Exception as e:
+        logger.error(f"Error checking title relevance: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/check-batch-relevance", tags=["Relevance"], response_model=BatchRelevanceResponse)
+async def check_batch_title_relevance(request: BatchRelevanceRequest):
+    """
+    Check if multiple titles are relevant to a technology using batch processing
+    
+    This endpoint uses Groq LLM to efficiently evaluate multiple titles at once
+    """
+    try:
+        # Use our batch relevance checker
+        result = relevance_checker.check_batch_relevance(request.titles, request.technology)
+        return result
+    except Exception as e:
+        logger.error(f"Error checking batch title relevance: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
+    import uvicorn
+    import os
+    
+    # Explicitly set environment variables for relevance checker
+    if "GROQ_API_KEY" in os.environ:
+        logger.info(f"Found GROQ_API_KEY in environment: {os.environ['GROQ_API_KEY'][:4]}...{os.environ['GROQ_API_KEY'][-4:]}")
+        os.environ["GROQ_API_KEY"] = os.environ["GROQ_API_KEY"]
+    else:
+        logger.warning("GROQ_API_KEY not found in environment variables")
+    
+    if "GROQ_MODEL" in os.environ:
+        logger.info(f"Found GROQ_MODEL in environment: {os.environ['GROQ_MODEL']}")
+        os.environ["GROQ_MODEL"] = os.environ["GROQ_MODEL"]
+    
     logger.info("Starting YouTube API server...")
     logger.info("Server URL: http://localhost:8000")
     logger.info("API Documentation: http://localhost:8000/docs")
     logger.info("ReDoc Documentation: http://localhost:8000/redoc")
-    uvicorn.run("youtube_fastapi:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run(
+        "youtube_fastapi:app", 
+        host="0.0.0.0", 
+        port=8000, 
+        reload=True,
+        reload_delay=1,
+        workers=1,
+        reload_excludes=["__pycache__"],
+        reload_includes=["*.py"],
+        reload_dirs=["./"],
+        use_colors=True,
+        log_level="info"
+    ) 
