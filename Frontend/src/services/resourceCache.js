@@ -14,12 +14,24 @@ const RESOURCES_API = `${API_URL}/api/resources`;
  * @param {string} technology - The technology to find resources for
  * @param {number} limit - Maximum number of resources to return
  * @param {boolean} refresh - Whether to force refresh the cache
+ * @param {Array<string>} roadmapTopics - Array of all topics in the roadmap
  * @returns {Promise<Object>} - The API response
  */
-export const findResourcesForTechnology = async (technology, limit = 5, refresh = false) => {
+export const findResourcesForTechnology = async (technology, limit = 5, refresh = false, roadmapTopics = []) => {
   try {
+    // Normalize the technology name to prevent duplicates
+    const normalizedTech = normalizeTechName(technology);
+    
+    // Build query parameters
+    let queryParams = `technology=${encodeURIComponent(normalizedTech)}&limit=${limit}&refresh=${refresh}`;
+    
+    // Add roadmap topics if provided
+    if (roadmapTopics && Array.isArray(roadmapTopics) && roadmapTopics.length > 0) {
+      queryParams += `&roadmapTopics=${encodeURIComponent(JSON.stringify(roadmapTopics))}`;
+    }
+    
     const response = await fetch(
-      `${RESOURCES_API}/technology?technology=${encodeURIComponent(technology)}&limit=${limit}&refresh=${refresh}`,
+      `${RESOURCES_API}/technology?${queryParams}`,
       {
         method: 'GET',
         headers: {
@@ -47,13 +59,16 @@ export const findResourcesForTechnology = async (technology, limit = 5, refresh 
  */
 export const findResourcesForMultipleTechnologies = async (technologies, limit = 5) => {
   try {
+    // Normalize all technology names
+    const normalizedTechs = technologies.map(tech => normalizeTechName(tech));
+    
     const response = await fetch(`${RESOURCES_API}/discover`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        technologies,
+        technologies: normalizedTechs,
         limit
       })
     });
@@ -77,6 +92,9 @@ export const findResourcesForMultipleTechnologies = async (technologies, limit =
  */
 export const cacheResource = async (resource, technology) => {
   try {
+    // Normalize the technology name
+    const normalizedTech = normalizeTechName(technology);
+    
     const response = await fetch(`${RESOURCES_API}/cache`, {
       method: 'POST',
       headers: {
@@ -84,7 +102,7 @@ export const cacheResource = async (resource, technology) => {
       },
       body: JSON.stringify({
         resource,
-        technology
+        technology: normalizedTech
       })
     });
 
@@ -108,6 +126,9 @@ export const cacheResource = async (resource, technology) => {
  */
 export const processTechnologies = async (technologies, batchSize = 5, startIndex = 0) => {
   try {
+    // Normalize all technology names
+    const normalizedTechs = technologies.map(tech => normalizeTechName(tech));
+    
     const response = await fetch(
       `${RESOURCES_API}/process?batchSize=${batchSize}&startIndex=${startIndex}`,
       {
@@ -116,7 +137,7 @@ export const processTechnologies = async (technologies, batchSize = 5, startInde
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          technologies
+          technologies: normalizedTechs
         })
       }
     );
@@ -157,6 +178,18 @@ export const cleanupExpiredResources = async () => {
 }; 
 
 /**
+ * Normalize a technology name to prevent duplicates
+ * @param {string} tech - The technology name to normalize
+ * @returns {string} - The normalized technology name
+ */
+const normalizeTechName = (tech) => {
+  // Remove duplicated words (e.g., "Git Git" -> "Git")
+  const words = tech.split(' ');
+  const uniqueWords = [...new Set(words)];
+  return uniqueWords.join(' ');
+};
+
+/**
  * Update shared resources after roadmap generation
  * This function analyzes all resources in a roadmap and updates the database
  * to convert individual resources to shared resources when appropriate
@@ -172,20 +205,12 @@ export const updateSharedResources = async (roadmap) => {
     const resourcesByUrl = new Map();
     const technologiesByUrl = new Map();
     
-    // Helper function to normalize technology names
-    const normalizeTechName = (tech) => {
-      // Remove duplicated words (e.g., "Git Git" -> "Git")
-      const words = tech.split(' ');
-      const uniqueWords = [...new Set(words)];
-      return uniqueWords.join(' ');
-    };
-    
     // Process all sections and topics to extract resources
     if (roadmap.sections && Array.isArray(roadmap.sections)) {
       roadmap.sections.forEach(section => {
         if (section.topics && Array.isArray(section.topics)) {
           section.topics.forEach(topic => {
-            // Get the technology name from the topic
+            // Get the technology name from the topic and normalize it
             const technology = normalizeTechName(topic.title.trim());
             
             // Check if this topic has a video resource

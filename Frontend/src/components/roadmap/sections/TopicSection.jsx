@@ -1,6 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import VideoCard from '../common/VideoCard';
 import { decodeUnicode, formatDuration } from '../utils/videoUtils';
+import { fetchRealDurations } from '../../../services/youtubeService';
+
+// Helper function to extract YouTube ID from URL
+const extractYouTubeId = (url) => {
+  if (!url) return null;
+  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  return match ? match[1] : null;
+};
+
+// Helper function to ensure video has an ID
+const ensureVideoId = (video) => {
+  if (!video.id) {
+    // Try to extract ID from URL
+    const youtubeId = extractYouTubeId(video.url);
+    if (youtubeId) {
+      video.id = youtubeId;
+      video.youtubeId = youtubeId;
+    } else {
+      // Generate a fallback ID using title or URL
+      video.id = `video-${video.url ? video.url.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '-') : Math.random().toString(36).substring(2, 10)}`;
+    }
+  }
+  return video;
+};
+
+// Helper function to process duration for playlist videos
+const processDuration = (duration) => {
+  if (!duration) return '0:00';
+  
+  // If duration is very short (likely a placeholder)
+  if (typeof duration === 'string' && 
+      (duration === '0:01' || duration === '0:00' || duration === '00:01' || duration === '00:00')) {
+    // For playlist videos, we might not have accurate duration data yet
+    return 'Loading...';
+  }
+  
+  return formatDuration(duration);
+};
 
 /**
  * TopicSection component for displaying a topic and its videos
@@ -24,17 +62,68 @@ const TopicSection = ({
   onAddNote,
   onPlaylistClick
 }) => {
+  const [videos, setVideos] = useState([]);
+  const [isLoadingDurations, setIsLoadingDurations] = useState(false);
+
+  useEffect(() => {
+    // Initialize videos from topic
+    if (topic?.video?.videos) {
+      const processedVideos = topic.video.videos.map(ensureVideoId);
+      setVideos(processedVideos);
+      
+      // Check if we need to fetch real durations
+      const hasPlaceholderDurations = processedVideos.some(video => 
+        ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration) || 
+        ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration_seconds)
+      );
+      
+      // Also check for very short durations that are likely placeholders
+      const hasShortDurations = processedVideos.some(video => {
+        // Check if duration is a number and very small
+        if (typeof video.duration_seconds === 'number' && video.duration_seconds < 60) {
+          return true;
+        }
+        
+        // Check if duration is a string representing a short time
+        if (typeof video.duration === 'string') {
+          const parts = video.duration.split(':').map(part => parseInt(part) || 0);
+          if (parts.length === 2 && parts[0] === 0 && parts[1] < 30) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      if (hasPlaceholderDurations || hasShortDurations) {
+        fetchDurations(processedVideos);
+      }
+    }
+  }, [topic]);
+  
+  const fetchDurations = async (videosToUpdate) => {
+    try {
+      setIsLoadingDurations(true);
+      const updatedVideos = await fetchRealDurations(videosToUpdate);
+      setVideos(updatedVideos);
+    } catch (error) {
+      console.error('Error fetching real durations:', error);
+    } finally {
+      setIsLoadingDurations(false);
+    }
+  };
+
   if (!topic?.video) return null;
 
   // Check if this is a playlist (has multiple videos)
-  const isPlaylist = topic.video.videos && topic.video.videos.length > 1;
-  const videoCount = topic.video.videos?.length || 0;
-  const firstVideo = topic.video.videos?.[0];
+  const isPlaylist = videos && videos.length > 1;
+  const videoCount = videos?.length || 0;
+  const firstVideo = videos?.[0];
 
   const handleThumbnailClick = (e) => {
     e.preventDefault();
     // Try to get the URL from topic.video.url or from the first video if available
-    const playlistUrl = topic.video.url || (topic.video.videos && topic.video.videos.length > 0 ? topic.video.videos[0].url : null);
+    const playlistUrl = topic.video.url || (videos && videos.length > 0 ? videos[0].url : null);
     if (playlistUrl) {
       onPlaylistClick(playlistUrl);
     }
@@ -62,9 +151,10 @@ const TopicSection = ({
           <div className="flex items-center space-x-2 text-gray-600">
             <span>By: {
               // Try all possible locations for channel name
-              topic.video.channel || 
-              (typeof topic.video.videos?.[0]?.channel === 'string' ? topic.video.videos[0].channel : 
-               topic.video.videos?.[0]?.channel?.name) || 
+              (typeof topic.video.channel === 'string' ? topic.video.channel : 
+               typeof topic.video.channel === 'object' && topic.video.channel?.name ? topic.video.channel.name :
+               typeof videos?.[0]?.channel === 'string' ? videos[0].channel : 
+               videos?.[0]?.channel?.name) || 
               "Unknown"
             }</span>
             {isPlaylist && (
@@ -106,9 +196,9 @@ const TopicSection = ({
       </div>
       
       {/* Videos Grid */}
-      {topic.video.videos && (
+      {videos && videos.length > 0 && (
         <div className="space-y-4">
-          {topic.video.videos.map((video) => (
+          {videos.map((video) => (
             <div key={video.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-6">
                 <div className="flex items-start space-x-6">
@@ -158,7 +248,14 @@ const TopicSection = ({
                             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            {formatDuration(video.duration)}
+                            {isLoadingDurations && 
+                             (
+                               ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration) || 
+                               ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration_seconds) ||
+                               (typeof video.duration_seconds === 'number' && video.duration_seconds < 60) ||
+                               (typeof video.duration === 'string' && video.duration.startsWith('0:') && parseInt(video.duration.split(':')[1]) < 30)
+                             ) ? 
+                              'Loading...' : formatDuration(video.duration)}
                           </span>
                           <span className="flex items-center">
                             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

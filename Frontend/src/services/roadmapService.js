@@ -15,6 +15,7 @@ const api = axios.create({
 // Track the last save operation to prevent duplicates
 let lastSaveTimestamp = 0;
 let lastSaveRoadmapTitle = '';
+let lastSaveRoadmapId = null;
 
 // Check authentication status
 export const checkAuth = async () => {
@@ -44,26 +45,78 @@ export const checkAuth = async () => {
   }
 };
 
+// Process source field to handle objects
+const processSourceField = (source) => {
+  if (!source) return 'YouTube';
+  
+  if (typeof source === 'string') {
+    return source;
+  }
+  
+  if (typeof source === 'object' && source.name !== undefined) {
+    return source.name || 'YouTube';
+  }
+  
+  return 'YouTube';
+};
+
+// Process duration to ensure it's stored as a number
+const processDuration = (duration) => {
+  if (!duration) return 0;
+  
+  // If it's already a number, return it
+  if (typeof duration === 'number') {
+    return duration;
+  }
+  
+  // Convert to string to ensure we can work with it
+  const durationStr = String(duration).trim();
+  
+  // If it's a string in format HH:MM:SS or MM:SS
+  if (durationStr.includes(':')) {
+    const parts = durationStr.split(':');
+    if (parts.length === 3) {
+      // Handle HH:MM:SS format
+      return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+    } else if (parts.length === 2) {
+      // Handle MM:SS format
+      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    }
+  }
+  
+  // Try to parse it as a number - ensure we're using a clean string
+  const parsed = parseInt(durationStr);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 // Save an AI-generated roadmap to the database
 export const saveGeneratedRoadmap = async (roadmapData) => {
   try {
     console.log('saveGeneratedRoadmap called with data:', roadmapData);
     
-    // Prevent duplicate saves by checking the timestamp and title
+    // Check if this is a forced save with a specific ID
+    const forceNewSave = roadmapData._forceNewSave === true;
     const currentTime = Date.now();
-    if (currentTime - lastSaveTimestamp < 5000 && roadmapData.title === lastSaveRoadmapTitle) {
-      console.log('Duplicate save detected and prevented. Last save was', (currentTime - lastSaveTimestamp)/1000, 'seconds ago');
-      // Return a mock successful response to prevent errors
+    
+    // If we have a saved ID and this isn't a forced save, return the existing ID
+    if (lastSaveRoadmapId && !forceNewSave && currentTime - lastSaveTimestamp < 30000 && roadmapData.title === lastSaveRoadmapTitle) {
+      console.log('Returning existing saved roadmap ID:', lastSaveRoadmapId);
       return {
         success: true,
-        message: 'Duplicate save prevented',
-        data: { title: roadmapData.title, duplicate: true }
+        message: 'Using existing saved roadmap',
+        _id: lastSaveRoadmapId,
+        data: { _id: lastSaveRoadmapId, title: roadmapData.title }
       };
     }
     
-    // Update the timestamp and title for future duplicate checks
+    // Update the timestamp and title for future checks
     lastSaveTimestamp = currentTime;
     lastSaveRoadmapTitle = roadmapData.title;
+    
+    // Clear any _forceNewSave flag before saving
+    if (roadmapData._forceNewSave) {
+      delete roadmapData._forceNewSave;
+    }
     
     // Get difficulty from the first section or default to Intermediate
     let difficulty = 'Intermediate';
@@ -76,13 +129,37 @@ export const saveGeneratedRoadmap = async (roadmapData) => {
     if (hasTopics) {
       console.log('Using existing topics format for saving to database');
       
+      // Process any complex source fields and ensure duration is a number
+      const processedTopics = roadmapData.topics.map(topic => {
+        if (topic.resources && Array.isArray(topic.resources)) {
+          return {
+            ...topic,
+            resources: topic.resources.map(resource => ({
+              ...resource,
+              source: processSourceField(resource.source),
+              duration: processDuration(resource.duration)
+            })),
+            totalResources: topic.resources.length,
+            completedResources: topic.completedResources || 0,
+            completedResourceIds: topic.completedResourceIds || []
+          };
+        }
+        return {
+          ...topic,
+          totalResources: 0,
+          completedResources: 0,
+          completedResourceIds: []
+        };
+      });
+      
       // Format the roadmap to match our backend model
       const formattedRoadmap = {
         title: roadmapData.title,
         description: roadmapData.description,
         category: roadmapData.category || roadmapData.title.split(' ').pop() || 'Web Development',
         difficulty: roadmapData.difficulty || 'Intermediate',
-        topics: roadmapData.topics,
+        isCustom: roadmapData.isCustom || false, // Ensure isCustom flag is preserved
+        topics: processedTopics,
         advancedTopics: roadmapData.advancedTopics || [],
         projects: roadmapData.projects || []
       };
@@ -103,9 +180,18 @@ export const saveGeneratedRoadmap = async (roadmapData) => {
         }
       });
       
-      console.log('Making API call to:', `${API_URL}/roadmaps`);
-      const response = await apiRequest.post('/roadmaps', formattedRoadmap);
+      // Determine which endpoint to use based on isCustom flag
+      const endpoint = formattedRoadmap.isCustom ? '/custom-roadmaps' : '/roadmaps';
+      console.log(`Making API call to: ${API_URL}${endpoint} (isCustom: ${formattedRoadmap.isCustom})`);
+      const response = await apiRequest.post(endpoint, formattedRoadmap);
       console.log('API response:', response);
+      
+      // Save the ID for future reference
+      if (response.data && response.data._id) {
+        lastSaveRoadmapId = response.data._id;
+        console.log('Saved roadmap ID for future reference:', lastSaveRoadmapId);
+      }
+      
       return response.data;
     }
     // If the roadmap has sections (from the UI format), convert to topics
@@ -127,26 +213,45 @@ export const saveGeneratedRoadmap = async (roadmapData) => {
         description: roadmapData.description,
         category: roadmapData.category || roadmapData.title.split(' ').pop() || 'Web Development',
         difficulty: difficulty,
-        topics: roadmapData.sections.map((section, index) => ({
-          title: section.title,
-          description: section.description || 'No description provided',
-          order: index + 1,
-          difficulty: section.difficulty?.toLowerCase() || 'intermediate',
-          progress: 'not-started',
-          hasGeneratedResources: false,
-          resources: []
-        })),
-        // Add advancedTopics if available
-        advancedTopics: roadmapData.advancedTopics?.map((topic) => ({
-          title: topic.title,
-          description: topic.description || 'No description provided'
-        })) || [],
-        // Add projects if available
-        projects: roadmapData.projects?.map((project) => ({
-          title: project.title,
-          description: project.description || 'No description provided',
-          difficulty: project.difficulty?.toLowerCase() || 'intermediate'
-        })) || []
+        isCustom: roadmapData.isCustom || false, // Ensure isCustom flag is preserved
+        topics: roadmapData.sections.map((section, index) => {
+          // Process resources if they exist
+          let resources = [];
+          if (section.topics && section.topics[0]?.video?.videos) {
+            resources = section.topics[0].video.videos.map(video => {
+              // Parse duration using the processDuration utility
+              const durationInSeconds = processDuration(video.duration);
+              
+              // Process the source field
+              const source = video.channel ? processSourceField(video.channel) : 'YouTube';
+              
+              return {
+                title: video.title,
+                url: video.url,
+                type: 'video',
+                description: video.description || '',
+                thumbnailUrl: video.thumbnail || '',
+                source: source,
+                duration: durationInSeconds,
+                isRequired: true
+              };
+            });
+          }
+          
+          return {
+            title: section.title,
+            description: section.description || '',
+            order: index + 1,
+            difficulty: section.difficulty?.toLowerCase() || 'intermediate',
+            resources: resources,
+            hasGeneratedResources: resources.length > 0,
+            totalResources: resources.length,
+            completedResources: 0,
+            completedResourceIds: []
+          };
+        }),
+        advancedTopics: [],
+        projects: []
       };
       
       console.log('Formatted roadmap for API:', formattedRoadmap);
@@ -165,27 +270,29 @@ export const saveGeneratedRoadmap = async (roadmapData) => {
         }
       });
       
-      console.log('Making API call to:', `${API_URL}/roadmaps`);
-      const response = await apiRequest.post('/roadmaps', formattedRoadmap);
+      // Determine which endpoint to use based on isCustom flag
+      const endpoint = formattedRoadmap.isCustom ? '/custom-roadmaps' : '/roadmaps';
+      console.log(`Making API call to: ${API_URL}${endpoint} (isCustom: ${formattedRoadmap.isCustom})`);
+      const response = await apiRequest.post(endpoint, formattedRoadmap);
       console.log('API response:', response);
+      
+      // Save the ID for future reference
+      if (response.data && response.data._id) {
+        lastSaveRoadmapId = response.data._id;
+        console.log('Saved roadmap ID for future reference:', lastSaveRoadmapId);
+      }
+      
       return response.data;
     }
+    // If neither topics nor sections, save locally
     else {
-      throw new Error('Invalid roadmap data: missing both sections and topics');
+      console.warn('Roadmap data has neither topics nor sections, saving locally');
+      return saveRoadmapLocally(roadmapData);
     }
-    
   } catch (error) {
-    console.error('Error saving generated roadmap:', error);
-    console.error('Error details:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      responseData: error.response?.data
-    });
-    
-    // Save locally as fallback before throwing error
-    saveRoadmapLocally(roadmapData);
-    throw error;
+    console.error('Error saving roadmap:', error);
+    // Try to save locally as fallback
+    return saveRoadmapLocally(roadmapData);
   }
 };
 
@@ -321,9 +428,12 @@ export const addTopic = async (roadmapId, topicData) => {
 };
 
 // Update topic progress
-export const updateTopicProgress = async (roadmapId, topicId, status) => {
+export const updateTopicProgress = async (roadmapId, topicId, resourceId, isCompleted) => {
   try {
-    const response = await api.put(`/roadmaps/${roadmapId}/topics/${topicId}/progress`, { status });
+    const response = await api.put(`/roadmaps/${roadmapId}/topics/${topicId}/progress`, { 
+      resourceId, 
+      isCompleted 
+    });
     return response.data;
   } catch (error) {
     console.error(`Error updating progress for topic ${topicId}:`, error);
@@ -628,5 +738,16 @@ export const getVideoNotes = async (roadmapId) => {
     // Return local notes as fallback
     const videoNotes = JSON.parse(localStorage.getItem('videoNotes') || '{}');
     return { success: true, data: { notes: videoNotes } };
+  }
+};
+
+// Update roadmap progress for a specific topic
+export const updateRoadmapProgress = async (roadmapId, progressData) => {
+  try {
+    const response = await api.put(`/roadmaps/${roadmapId}/progress`, progressData);
+    return response;
+  } catch (error) {
+    console.error('Error updating roadmap progress:', error);
+    throw error;
   }
 }; 

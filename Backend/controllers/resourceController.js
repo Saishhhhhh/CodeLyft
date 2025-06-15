@@ -119,7 +119,7 @@ const fallbackAreTechnologiesEquivalent = (tech1, tech2) => {
 exports.findResourcesForTechnology = async (req, res) => {
   try {
     const { technology } = req.query;
-    const { limit = 10, refresh = false } = req.query;
+    const { limit = 10, refresh = false, roadmapTopics = [] } = req.query;
     
     if (!technology) {
       return res.status(400).json({
@@ -130,6 +130,17 @@ exports.findResourcesForTechnology = async (req, res) => {
     
     const currentDate = new Date();
     let resources = [];
+    
+    // Parse roadmap topics if provided
+    let parsedRoadmapTopics = [];
+    try {
+      if (roadmapTopics && typeof roadmapTopics === 'string' && roadmapTopics.trim() !== '') {
+        parsedRoadmapTopics = JSON.parse(roadmapTopics);
+      }
+    } catch (error) {
+      console.error('Error parsing roadmap topics:', error);
+      // Continue with empty roadmap topics array
+    }
     
     // Only fetch fresh resources if refresh is not true
     if (refresh !== 'true') {
@@ -161,6 +172,20 @@ exports.findResourcesForTechnology = async (req, res) => {
                 isMatch = true;
                 break;
               }
+            }
+          }
+          
+          // If we have a match but also have roadmap topics provided,
+          // verify ALL technologies in the shared resource are present in the roadmap
+          if (isMatch && parsedRoadmapTopics.length > 0) {
+            const allTechnologiesInRoadmap = await checkAllTechnologiesInRoadmap(
+              resource.technologies,
+              parsedRoadmapTopics
+            );
+            
+            if (!allTechnologiesInRoadmap) {
+              console.log(`Rejecting shared resource for "${technology}" because not all its technologies are in the roadmap`);
+              isMatch = false;
             }
           }
         } 
@@ -208,6 +233,65 @@ exports.findResourcesForTechnology = async (req, res) => {
       error: error.message
     });
   }
+};
+
+/**
+ * Check if all technologies in a shared resource are present in the roadmap
+ * @param {Array<string>} resourceTechnologies - Technologies in the resource
+ * @param {Array<string>} roadmapTopics - Topics in the roadmap
+ * @returns {Promise<boolean>} - Whether all resource technologies are in the roadmap
+ */
+const checkAllTechnologiesInRoadmap = async (resourceTechnologies, roadmapTopics) => {
+  if (!resourceTechnologies || !Array.isArray(resourceTechnologies) || resourceTechnologies.length === 0) {
+    return false;
+  }
+  
+  if (!roadmapTopics || !Array.isArray(roadmapTopics) || roadmapTopics.length === 0) {
+    return false;
+  }
+  
+  // Normalize roadmap topics for easier comparison
+  const normalizedRoadmapTopics = roadmapTopics.map(topic => 
+    typeof topic === 'string' ? topic.toLowerCase() : ''
+  );
+  
+  // Check if each technology in the resource is in the roadmap
+  for (const resourceTech of resourceTechnologies) {
+    let techFound = false;
+    
+    // First check direct match
+    if (normalizedRoadmapTopics.includes(resourceTech.toLowerCase())) {
+      techFound = true;
+      continue;
+    }
+    
+    // If no direct match, check equivalence with each roadmap topic
+    for (const roadmapTopic of normalizedRoadmapTopics) {
+      try {
+        const isEquivalent = await areTechnologiesEquivalent(resourceTech, roadmapTopic);
+        if (isEquivalent) {
+          techFound = true;
+          break;
+        }
+      } catch (error) {
+        console.error(`Error checking technology equivalence: ${error.message}`);
+        // Fallback to simplified comparison
+        if (resourceTech.toLowerCase().replace(/\s+/g, '') === roadmapTopic.replace(/\s+/g, '')) {
+          techFound = true;
+          break;
+        }
+      }
+    }
+    
+    // If any technology is not found in the roadmap, return false
+    if (!techFound) {
+      console.log(`Resource technology "${resourceTech}" not found in roadmap topics`);
+      return false;
+    }
+  }
+  
+  // All technologies were found in the roadmap
+  return true;
 };
 
 /**

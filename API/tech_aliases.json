@@ -1,0 +1,1051 @@
+{
+    "technologies": [
+      {
+        "canonical": "android",
+        "aliases": [
+          "android os",
+          "android platform",
+          "google android"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "angular",
+        "aliases": [
+          "angularjs",
+          "angular 2",
+          "angular.js"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "ansible",
+        "aliases": [
+          "ansible automation",
+          "ansible tower",
+          "ansible awx"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "apache",
+        "aliases": [
+          "http server",
+          "apache http server",
+          "apache2"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "azure",
+        "aliases": [
+          "microsoft azure",
+          "windows azure",
+          "azure cloud"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "bash",
+        "aliases": [
+          "bourne again shell",
+          "unix shell",
+          "command"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "bitbucket",
+        "aliases": [
+          "atlassian bitbucket",
+          "bitbucket cloud",
+          "bitbucket server"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "blockchain",
+        "aliases": [
+          "distributed ledger technology",
+          "dlf",
+          "distributed ledger"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "c++",
+        "aliases": [
+          "cpp",
+          "cplusplus",
+          "c plus plus"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "c",
+        "aliases": [
+          "c"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "cd",
+        "aliases": [
+          "compact disc",
+          "audio cd",
+          "music cd"
+        ],
+        "ecosystem": "storage"
+      },
+      {
+        "canonical": "continuous integration",
+        "aliases": [
+          "ci",
+          "continuous integration",
+          "integration"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "ci/cd",
+        "aliases": [
+          "continuous integration/continuous deployment",
+          "continuous integration/continuous delivery",
+          "devops pipeline"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "css",
+        "aliases": [
+          "cascading style sheets",
+          "stylesheets",
+          "styling"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "circleci",
+        "aliases": [
+          "circle ci",
+          "circle-ci",
+          "circle"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "emacs",
+        "aliases": [
+          "gnu emacs",
+          "emacs editor",
+          "emacs ide"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "express.js",
+        "aliases": [
+          "express",
+          "expressjs",
+          "node express"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "genai",
+        "aliases": [
+          "generative ai",
+          "ai generator",
+          "artificial general intelligence"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "git",
+        "aliases": [
+          "version control",
+          "source control"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "gitlab",
+        "aliases": [
+          "git lab",
+          "gitlab ci",
+          "gitlab ci cd"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "github",
+        "aliases": [
+          "git hub",
+          "github.com",
+          "git repository"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "go",
+        "aliases": [
+          "golang"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "godot",
+        "aliases": [
+          "godot engine",
+          "godot game engine"
+        ],
+        "ecosystem": "game development"
+      },
+      {
+        "canonical": "google analytics",
+        "aliases": [
+          "ga",
+          "google analytics tool",
+          "web analytics service"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "golang",
+        "aliases": [
+          "go",
+          "go language"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "grafana",
+        "aliases": [
+          "grafana dashboard",
+          "grafana metrics",
+          "grafana analytics"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "graphql",
+        "aliases": [
+          "query language",
+          "graphql api",
+          "gql"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "html",
+        "aliases": [
+          "hypertext markup language",
+          "hyper text markup language",
+          "markup language"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "hashing algorithms",
+        "aliases": [
+          "hash functions",
+          "message digest algorithms",
+          "cryptographic hash functions"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "ionic",
+        "aliases": [
+          "ionic framework",
+          "ionic mobile app",
+          "ionic hybrid app"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "istio",
+        "aliases": [
+          "istio service mesh",
+          "istio",
+          "service mesh"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "java",
+        "aliases": [
+          "jdk",
+          "j2ee",
+          "javase"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "javascript",
+        "aliases": [
+          "js",
+          "ecmascript",
+          "es"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "jenkins",
+        "aliases": [
+          "jenkins ci",
+          "jenkins cd",
+          "jenkins pipeline"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "jest",
+        "aliases": [
+          "jestjs",
+          "facebook jest"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "jetpack compose",
+        "aliases": [
+          "android compose",
+          "compose ui",
+          "jetpack compose ui"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "jira",
+        "aliases": [
+          "atlassian jira",
+          "jira software",
+          "jira"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "kafka",
+        "aliases": [
+          "apache kafka",
+          "confluent kafka"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "kibana",
+        "aliases": [
+          "kbn",
+          "elastic kibana",
+          "kibana dashboard"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "kotlin",
+        "aliases": [
+          "kotlin programming language",
+          "kotlin",
+          "kt"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "kubernetes",
+        "aliases": [
+          "kubernetes"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "linux",
+        "aliases": [
+          "gnu/linux",
+          "unix-like",
+          "posix"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "looker",
+        "aliases": [
+          "looker analytics",
+          "looker bi",
+          "looker business intelligence"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "mongodb",
+        "aliases": [
+          "mongo",
+          "mongodb database",
+          "no sql database"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "ms sql",
+        "aliases": [
+          "microsoft sql server",
+          "sqlserver",
+          "t-sql"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "mvc",
+        "aliases": [
+          "model-view-controller",
+          "model view controller",
+          "mvc pattern"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "mvvm",
+        "aliases": [
+          "mvvm"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "mariadb",
+        "aliases": [
+          "mariadb database",
+          "mysql mariadb",
+          "mariadb server"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "matplotlib",
+        "aliases": [
+          "mpl",
+          "pyplot",
+          "plot"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "microfrontends",
+        "aliases": [
+          "microfrontends"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "microservices",
+        "aliases": [
+          "service-oriented architecture",
+          "soa",
+          "microservice architecture"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "mysql",
+        "aliases": [
+          "mysql database",
+          "mysql db",
+          "rdbms"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "navigation stacks",
+        "aliases": [
+          "navstacks",
+          "nav stacks",
+          "stack nav"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "new relic",
+        "aliases": [
+          "newrelic",
+          "nr",
+          "new-relic"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "nginx",
+        "aliases": [
+          "engine-x",
+          "nginx server",
+          "nginx web server"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "nosql databases",
+        "aliases": [
+          "not only sql",
+          "non-relational databases",
+          "no sql databases"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "node js",
+        "aliases": [
+          "node",
+          "node.js",
+          "node js"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "normalization",
+        "aliases": [
+          "normalization"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "nuxtjs",
+        "aliases": [
+          "nuxt",
+          "nuxt framework",
+          "nuxt vue"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "object-oriented programming",
+        "aliases": [
+          "oop",
+          "object orientation",
+          "object-oriented design"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "open-source",
+        "aliases": [
+          "oss",
+          "foss",
+          "free and open-source software"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "openzeppelin",
+        "aliases": [
+          "oz",
+          "openzeppelin",
+          "zeppelin"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "oracle",
+        "aliases": [
+          "oracle database",
+          "oracle db",
+          "oracle rdbms"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "pci dss",
+        "aliases": [
+          "pci dss"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "pagerduty",
+        "aliases": [
+          "pager duty",
+          "pd",
+          "incident management"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "pandas",
+        "aliases": [
+          "pd",
+          "panel data",
+          "python data analysis"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "playwright",
+        "aliases": [
+          "pw",
+          "playwright framework",
+          "playwright test"
+        ],
+        "ecosystem": "testing"
+      },
+      {
+        "canonical": "postgresql",
+        "aliases": [
+          "postgres",
+          "pgsql",
+          "psql"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "powershell",
+        "aliases": [
+          "ps",
+          "pwsh",
+          "msh"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "prometheus",
+        "aliases": [
+          "prometheus.io",
+          "prometheus monitoring",
+          "prometheus"
+        ],
+        "ecosystem": "monitoring"
+      },
+      {
+        "canonical": "python",
+        "aliases": [
+          "py",
+          "pythonic",
+          "pythonlang"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "react",
+        "aliases": [
+          "reactjs",
+          "react.js",
+          "react js",
+          "react library",
+          "react framework"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "react native",
+        "aliases": [
+          "react native"
+        ],
+        "ecosystem": "unknown"
+      },
+      {
+        "canonical": "rest",
+        "aliases": [
+          "representational state of rest",
+          "restful",
+          "rest api"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "rabbitmq",
+        "aliases": [
+          "amqp",
+          "message broker",
+          "message queue"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "redis",
+        "aliases": [
+          "redis cache",
+          "redis db",
+          "in-memory data store"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "regression",
+        "aliases": [
+          "linear regression",
+          "non-linear regression",
+          "ordinary least squares"
+        ],
+        "ecosystem": "machine learning"
+      },
+      {
+        "canonical": "room database",
+        "aliases": [
+          "android room",
+          "room persistence library",
+          "room"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "rust",
+        "aliases": [
+          "rustlang",
+          "rust programming language"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "solana",
+        "aliases": [
+          "sol",
+          "solana blockchain",
+          "solana"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "solidity",
+        "aliases": [
+          "solidity lang",
+          "etherscript",
+          "serpent"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "sha",
+        "aliases": [
+          "secure hash algorithm",
+          "sha-1",
+          "sha-256"
+        ],
+        "ecosystem": "security"
+      },
+      {
+        "canonical": "sql",
+        "aliases": [
+          "structured query language",
+          "sequel",
+          "t-sql"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "sqlite",
+        "aliases": [
+          "sql lite",
+          "sqlite3",
+          "sql-lite"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "salesforce",
+        "aliases": [
+          "sf",
+          "salesforce",
+          "crm"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "scripting",
+        "aliases": [
+          "scripting language",
+          "scripting engine",
+          "scripting"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "sentry",
+        "aliases": [
+          "sentry.io",
+          "raven",
+          "getsentry"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "servicemesh",
+        "aliases": [
+          "istio",
+          "linkerd",
+          "envoy"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "sharding strategies",
+        "aliases": [
+          "horizontal partitioning",
+          "database sharding",
+          "data partitioning"
+        ],
+        "ecosystem": "database"
+      },
+      {
+        "canonical": "slack",
+        "aliases": [
+          "slack technologies",
+          "slack platform",
+          "slack collaboration tool"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "solidjs",
+        "aliases": [
+          "solid.js",
+          "solidjs framework",
+          "solid framework"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "spark",
+        "aliases": [
+          "apache spark",
+          "spark framework",
+          "spark sql"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "svelte",
+        "aliases": [
+          "sveltejs",
+          "svelte framework",
+          "svelte"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "swift",
+        "aliases": [
+          "swiftlang",
+          "swift programming language",
+          "apple swift"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "swift package manager",
+        "aliases": [
+          "spm",
+          "swift package manager cli",
+          "swift package manager tool"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "test driven development",
+        "aliases": [
+          "tdd",
+          "bdd",
+          "behavior driven development"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "tailwindcss",
+        "aliases": [
+          "tailwind",
+          "twcss"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "tauri",
+        "aliases": [
+          "tauri framework",
+          "tauri.js",
+          "desktop app framework"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "teamcity",
+        "aliases": [
+          "jetbrains teamcity",
+          "team city",
+          "jetbrains teamcity"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "terraform",
+        "aliases": [
+          "infrastructure as code",
+          "iac",
+          "hashicorp terraform"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "testrail",
+        "aliases": [
+          "test rail",
+          "testrail",
+          "test rail tool"
+        ],
+        "ecosystem": "testing"
+      },
+      {
+        "canonical": "typescript",
+        "aliases": [
+          "ts",
+          "tscript"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "unity3d",
+        "aliases": [
+          "unity",
+          "unity 3d",
+          "unity engine"
+        ],
+        "ecosystem": "game development"
+      },
+      {
+        "canonical": "unix",
+        "aliases": [
+          "posix",
+          "unix-like",
+          "nix"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "unreal engine",
+        "aliases": [
+          "ue",
+          "unreal",
+          "unrealengine"
+        ],
+        "ecosystem": "game engine"
+      },
+      {
+        "canonical": "userdefaults",
+        "aliases": [
+          "nsuserdefaults",
+          "user",
+          "standarduserdefaults"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "vim",
+        "aliases": [
+          "vi",
+          "vim editor",
+          "text editor"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "vite",
+        "aliases": [
+          "vitejs"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "vue",
+        "aliases": [
+          "vuejs",
+          "vue.js",
+          "vuescript"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "vue.js",
+        "aliases": [
+          "vue",
+          "vuejs",
+          "vjs"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "web scraping",
+        "aliases": [
+          "data scraping",
+          "data extraction",
+          "screen scraping"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "websockets",
+        "aliases": [
+          "websocket",
+          "ws",
+          "real-time web"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "webpack",
+        "aliases": [
+          "webpacker",
+          "module bundler",
+          "javascript bundler"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "windows",
+        "aliases": [
+          "win",
+          "microsoft windows",
+          "ms windows"
+        ],
+        "ecosystem": "desktop"
+      },
+      {
+        "canonical": "xcframework",
+        "aliases": [
+          "xcode framework",
+          "swift framework",
+          "ios framework"
+        ],
+        "ecosystem": "mobile"
+      },
+      {
+        "canonical": "grpc",
+        "aliases": [
+          "grpc.io",
+          "google rpc",
+          "protobuf rpc"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "junit",
+        "aliases": [
+          "junit framework",
+          "junit testing",
+          "java unit testing"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "npm",
+        "aliases": [
+          "node package manager",
+          "nodepm",
+          "package manager for nodejs"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "pnpm",
+        "aliases": [
+          "performant npm",
+          "fast npm",
+          "pnpm package manager"
+        ],
+        "ecosystem": "devops"
+      }
+    ]
+  }

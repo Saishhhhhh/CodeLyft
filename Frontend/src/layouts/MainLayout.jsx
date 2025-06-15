@@ -1,4 +1,5 @@
 import Navbar from '../components/Navbar';
+import ChatbotContainer from '../components/chatbot/ChatbotContainer';
 
 const MainLayout = ({ children }) => {
   return (
@@ -7,6 +8,7 @@ const MainLayout = ({ children }) => {
       <main>
         {children}
       </main>
+      <ChatbotContainer />
     </div>
   );
 };

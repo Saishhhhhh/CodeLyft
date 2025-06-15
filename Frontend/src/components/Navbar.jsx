@@ -59,6 +59,9 @@ const Navbar = () => {
             <Link to="/resources" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
               Resources
             </Link>
+            <Link to="/custom-roadmap" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
+              Custom Roadmap
+            </Link>
             
             {isAuthenticated ? (
               <div className="relative" ref={profileDropdownRef}>
@@ -85,6 +88,9 @@ const Navbar = () => {
                     </Link>
                     <Link to="/my-roadmaps" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       My Roadmaps
+                    </Link>
+                    <Link to="/custom-roadmap" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      Custom Roadmap
                     </Link>
                     <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Profile Settings
@@ -151,6 +157,9 @@ const Navbar = () => {
               </Link>
               <Link to="/resources" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
                 Resources
+              </Link>
+              <Link to="/custom-roadmap" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
+                Custom Roadmap
               </Link>
               
               {isAuthenticated ? (

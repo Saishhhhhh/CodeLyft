@@ -14,8 +14,11 @@ import EmailVerificationPage from './pages/EmailVerificationPage';
 import Dashboard from './pages/Dashboard';
 import MyRoadmapsPage from './pages/MyRoadmapsPage';
 import RoadmapDetailPage from './pages/RoadmapDetailPage';
+import CustomRoadmapPage from './pages/CustomRoadmapPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useAuth } from './context/AuthContext';
+import { CustomRoadmapProvider } from './context/CustomRoadmapContext';
+import { ChatbotProvider } from './context/ChatbotContext';
 import { useEffect } from 'react';
 
 // Protected route component
@@ -106,129 +109,162 @@ const OAuthCallback = () => {
 
 function App() {
   return (
-    <Routes>
-      {/* Public routes (accessible only when not logged in) */}
-      <Route 
-        path="/login" 
-        element={
-          <PublicRoute>
-            <LoginPage />
-          </PublicRoute>
-        } 
-      />
-      <Route 
-        path="/signup" 
-        element={
-          <PublicRoute>
-            <SignupPage />
-          </PublicRoute>
-        } 
-      />
-      <Route 
-        path="/forgot-password" 
-        element={
-          <PublicRoute>
-            <ForgotPasswordPage />
-          </PublicRoute>
-        } 
-      />
-      <Route 
-        path="/reset-password" 
-        element={
-          <PublicRoute>
-            <ResetPasswordPage />
-          </PublicRoute>
-        } 
-      />
-      
-      {/* OAuth callback routes */}
-      <Route path="/auth/callback" element={<OAuthCallback />} />
-      
-      {/* Protected routes (require authentication) */}
-      <Route 
-        path="/dashboard" 
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/verify-email" 
-        element={
-          <ProtectedRoute>
-            <EmailVerificationPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/my-roadmaps" 
-        element={
-          <ProtectedRoute>
-            <MyRoadmapsPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Two separate roadmap detail routes */}
-      <Route 
-        path="/roadmaps/:id/view" 
-        element={
-          <ProtectedRoute>
-            <RoadmapResultPage fromSaved={true} />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/roadmaps/:id/resources" 
-        element={
-          <ProtectedRoute>
-            <RoadmapProgressPage fromSaved={true} />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Legacy route for backward compatibility */}
-      <Route 
-        path="/roadmaps/:id" 
-        element={
-          <ProtectedRoute>
-            <RoadmapDetailPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Routes with MainLayout */}
-      <Route path="/" element={
-        <MainLayout>
-          <HomePage />
-        </MainLayout>
-      } />
-      <Route path="/questions" element={
-        <MainLayout>
-          <RoadmapQuestionsPage />
-        </MainLayout>
-      } />
-      <Route path="/roadmap" element={
-        <MainLayout>
-          <RoadmapResultPage />
-        </MainLayout>
-      } />
-      <Route path="/test-roadmap" element={
-        <MainLayout>
-          <RoadmapTestPage />
-        </MainLayout>
-      } />
-      <Route path="/roadmap-progress" element={
-        <MainLayout>
-          <RoadmapProgressPage />
-        </MainLayout>
-      } />
-      
-      {/* 404 Not Found */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-  )
+    <ChatbotProvider>
+      <CustomRoadmapProvider>
+        <Routes>
+          {/* Public routes (accessible only when not logged in) */}
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/signup" 
+            element={
+              <PublicRoute>
+                <SignupPage />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/forgot-password" 
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/reset-password" 
+            element={
+              <PublicRoute>
+                <ResetPasswordPage />
+              </PublicRoute>
+            } 
+          />
+          
+          {/* OAuth callback routes */}
+          <Route path="/auth/callback" element={<OAuthCallback />} />
+          
+          {/* Protected routes (require authentication) */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/verify-email" 
+            element={
+              <ProtectedRoute>
+                <EmailVerificationPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/my-roadmaps" 
+            element={
+              <ProtectedRoute>
+                <MyRoadmapsPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Custom Roadmap Routes */}
+          <Route 
+            path="/custom-roadmap" 
+            element={
+              <MainLayout>
+                <CustomRoadmapPage />
+              </MainLayout>
+            } 
+          />
+          
+          <Route 
+            path="/custom-roadmap/:id" 
+            element={
+              <MainLayout>
+                <CustomRoadmapPage />
+              </MainLayout>
+            } 
+          />
+          
+          {/* Two separate roadmap detail routes */}
+          <Route 
+            path="/roadmaps/:id/view" 
+            element={
+              <ProtectedRoute>
+                <RoadmapResultPage fromSaved={true} />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/roadmaps/:id/resources" 
+            element={
+              <ProtectedRoute>
+                <RoadmapProgressPage fromSaved={true} />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Legacy route for backward compatibility */}
+          <Route 
+            path="/roadmaps/:id" 
+            element={
+              <ProtectedRoute>
+                <RoadmapDetailPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* New route for custom roadmaps */}
+          <Route 
+            path="/roadmaps/:id/custom" 
+            element={
+              <ProtectedRoute>
+                <RoadmapResultPage fromSaved={true} isCustom={true} />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Routes with MainLayout */}
+          <Route path="/" element={
+            <MainLayout>
+              <HomePage />
+            </MainLayout>
+          } />
+          <Route path="/questions" element={
+            <MainLayout>
+              <RoadmapQuestionsPage />
+            </MainLayout>
+          } />
+          <Route path="/roadmap" element={
+            <MainLayout>
+              <RoadmapResultPage />
+            </MainLayout>
+          } />
+          <Route path="/test-roadmap" element={
+            <MainLayout>
+              <RoadmapTestPage />
+            </MainLayout>
+          } />
+          <Route path="/roadmap-progress" element={
+            <MainLayout>
+              <RoadmapProgressPage />
+            </MainLayout>
+          } />
+          
+          {/* 404 Not Found */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </CustomRoadmapProvider>
+    </ChatbotProvider>
+  );
 }
 
-export default App
+export default App;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaFileExport, FaYoutube } from 'react-icons/fa';
+import { FaFileExport, FaYoutube, FaPenSquare, FaUserPlus } from 'react-icons/fa';
 import { downloadRoadmap } from '../../../services/roadmapService';
 import { toast } from 'react-hot-toast';
 
@@ -17,7 +17,19 @@ const itemVariants = {
   }
 };
 
-const RoadmapFooter = ({ fromSaved = false, onSave, onAddVideos, loadingVideos, savedToDB, savingToDB, onExport, roadmap }) => {
+const RoadmapFooter = ({ 
+  fromSaved = false, 
+  isCustom = false, 
+  onSave, 
+  onAddVideos, 
+  loadingVideos, 
+  savedToDB, 
+  savingToDB, 
+  onExport, 
+  onStartJourney,
+  hasResources,
+  roadmap 
+}) => {
   const navigate = useNavigate();
 
   const handleExport = () => {
@@ -48,7 +60,7 @@ const RoadmapFooter = ({ fromSaved = false, onSave, onAddVideos, loadingVideos, 
       transition={{ duration: 0.5 }}
     >
       <div className="flex flex-wrap justify-center gap-6">
-        {/* Generate YouTube Resources button - show whenever onAddVideos is provided */}
+        {/* Generate YouTube Resources button - show for all roadmap types */}
         {onAddVideos && (
           <motion.button
             whileHover={{ 
@@ -66,10 +78,35 @@ const RoadmapFooter = ({ fromSaved = false, onSave, onAddVideos, loadingVideos, 
               whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.3 }}
             />
-            <FaYoutube className="mr-2 relative" />
+            <FaUserPlus className="mr-2 relative" />
             <span className="relative">
-              {loadingVideos ? 'Generating Resources...' : 'Start YouTube Journey'}
+              {loadingVideos ? 'Adding Resources...' : 'Add Learning Resources'}
             </span>
+            <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+              New
+            </div>
+          </motion.button>
+        )}
+
+        {/* View Journey button - show only if there are resources to view */}
+        {hasResources && onStartJourney && (
+          <motion.button
+            whileHover={{ 
+              scale: 1.05, 
+              boxShadow: "0 0 30px rgba(59,130,246,0.15)",
+              transition: { duration: 0.2 }
+            }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onStartJourney}
+            className="group relative px-8 py-4 rounded-xl font-medium text-blue-600 bg-white border border-blue-200 hover:border-blue-300 transition-all duration-300 overflow-hidden flex items-center"
+          >
+            <motion.div 
+              className="absolute inset-0 bg-gradient-to-r from-blue-50 via-cyan-50 to-sky-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              whileHover={{ scale: 1.1 }}
+              transition={{ duration: 0.3 }}
+            />
+            <FaPenSquare className="mr-2 relative" />
+            <span className="relative">View Learning Journey</span>
           </motion.button>
         )}
 
@@ -110,6 +147,12 @@ const RoadmapFooter = ({ fromSaved = false, onSave, onAddVideos, loadingVideos, 
           <span className="relative">Export Roadmap</span>
         </motion.button>
       </div>
+      
+      <p className="text-sm text-gray-500 mt-6">
+        Click "Add Learning Resources" to add your own YouTube videos or playlists for each topic.
+        <br />
+        We'll automatically find resources for any topics you skip.
+      </p>
     </motion.div>
   );
 };

@@ -18,6 +18,7 @@ const passwordRoutes = require('./routes/passwordRoutes');
 const roadmapRoutes = require('./routes/roadmapRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const resourceRoutes = require('./routes/resourceRoutes');
+const customRoadmapRoutes = require('./routes/customRoadmapRoutes');
 
 // Connect to MongoDB
 connectDB();
@@ -69,6 +70,7 @@ app.use('/api/password', passwordRoutes);
 app.use('/api', roadmapRoutes);
 app.use('/api', noteRoutes);
 app.use('/api/resources', resourceRoutes);
+app.use('/api/custom-roadmaps', customRoadmapRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

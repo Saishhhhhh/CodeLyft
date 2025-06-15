@@ -13,7 +13,8 @@ import {
   getCompletedVideos,
   getRoadmap,
   downloadRoadmap,
-  saveGeneratedRoadmap
+  saveGeneratedRoadmap,
+  updateRoadmapProgress
 } from '../services/roadmapService';
 import { toast } from 'react-hot-toast';
 import VideoPlayerModal from '../components/roadmap/modals/VideoPlayerModal';
@@ -21,6 +22,8 @@ import NotesModal from '../components/roadmap/modals/NotesModal';
 import { decodeUnicode, formatDuration, getChannelName } from '../components/roadmap/utils/videoUtils';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
+import useChatbotContext from '../hooks/useChatbotContext';
+import ChatbotWrapper from '../components/chatbot/ChatbotWrapper';
 
 // Import our components
 import SectionHeader from '../components/roadmap/sections/SectionHeader';
@@ -67,6 +70,32 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
     });
   }, [roadmap]);
 
+  // Update chatbot context with current roadmap progress data
+  const chatbotContextData = useMemo(() => ({
+    roadmap: roadmap ? {
+      title: roadmap.title,
+      description: roadmap.description,
+      isCustom: roadmap.isCustom || false
+    } : null,
+    topic: currentVideo ? {
+      title: currentVideo.title,
+      url: currentVideo.url,
+      channel: currentVideo.channel
+    } : null,
+    progress: {
+      percentage: progressSummary.percentage,
+      completed: progressSummary.completed,
+      total: progressSummary.total,
+      hasResources: hasResources,
+      completedVideos: Object.keys(completedVideos).length
+    }
+  }), [roadmap, currentVideo, progressSummary, completedVideos, hasResources]);
+
+  useChatbotContext(
+    chatbotContextData,
+    [chatbotContextData]
+  );
+
   useEffect(() => {
     if (fromSaved) {
       // Loading an existing roadmap from the database
@@ -80,8 +109,25 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
             return;
           }
           
-          const response = await getRoadmap(id);
+          // Check for isCustom parameter in URL
+          const urlParams = new URLSearchParams(window.location.search);
+          const isCustom = urlParams.get('isCustom') === 'true';
+          
+          let response;
+          try {
+            // Use the regular roadmap service
+            console.log('Fetching roadmap with ID:', id);
+            response = await getRoadmap(id);
+          } catch (fetchError) {
+            console.error(`Error fetching roadmap:`, fetchError);
+            setError('Failed to load the roadmap. Please try again.');
+            setLoading(false);
+            return;
+          }
+          
           const roadmapData = response.data;
+          
+          console.log('Roadmap data from server:', roadmapData);
           
           // Check if this roadmap has any topics with resources
           const hasResources = roadmapData.topics.some(topic => 
@@ -98,6 +144,12 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
           const resourcesByUrl = new Map();
           roadmapData.topics.forEach(topic => {
             if (topic.resources && topic.resources.length > 0) {
+              // Ensure totalResources is set correctly
+              if (!topic.totalResources || topic.totalResources === 0) {
+                topic.totalResources = topic.resources.length;
+                console.log(`Setting totalResources for topic ${topic.title} to ${topic.resources.length}`);
+              }
+              
               topic.resources.forEach(resource => {
                 if (!resourcesByUrl.has(resource.url)) {
                   resourcesByUrl.set(resource.url, []);
@@ -115,14 +167,40 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
           const formattedRoadmap = {
             title: roadmapData.title,
             description: roadmapData.description,
+            isCustom: roadmapData.isCustom || false, // Preserve isCustom flag
             sections: roadmapData.topics.map(topic => {
               // Create a topic with videos from resources
-              const videos = topic.resources ? topic.resources.map(resource => ({
-                id: resource._id || `resource-${Math.random().toString(36).substring(2, 9)}`,
+              const videos = topic.resources ? topic.resources.map(resource => {
+                // Use the MongoDB _id directly for the resource ID
+                const resourceId = resource._id || 
+                  `resource-${topic._id}-${resource.url.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 20)}`;
+                
+                // Ensure duration is properly formatted
+                let formattedDuration = 'Unknown';
+                if (resource.duration) {
+                  if (typeof resource.duration === 'number') {
+                    const hours = Math.floor(resource.duration / 3600);
+                    const minutes = Math.floor((resource.duration % 3600) / 60);
+                    const seconds = resource.duration % 60;
+                    
+                    if (hours > 0) {
+                      formattedDuration = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    } else {
+                      formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                  } else if (typeof resource.duration === 'string') {
+                    formattedDuration = resource.duration;
+                  }
+                }
+                
+                return {
+                  id: resourceId,
+                  _id: resourceId, // Add _id field to match MongoDB structure
                 title: resource.title,
                 url: resource.url,
                 channel: resource.source || 'YouTube',
-                duration: resource.duration ? formatDuration(resource.duration) : 'Unknown',
+                  duration: formattedDuration,
+                  duration_seconds: resource.duration || 0,
                 description: resource.description || '',
                 thumbnail: resource.thumbnailUrl || `https://via.placeholder.com/120x68?text=${encodeURIComponent(resource.title)}`,
                 sharedWith: resourcesByUrl.get(resource.url)?.length > 1 ? 
@@ -130,17 +208,22 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
                     .filter(item => item.topicId !== topic._id)
                     .map(item => item.topicTitle) : 
                   []
-              })) : [];
+                };
+              }) : [];
               
               return {
                 title: topic.title,
                 description: topic.description,
-                progress: topic.progress,
+                progress: topic.completedResources > 0 ? 
+                  (topic.completedResources === topic.totalResources ? 'completed' : 'in-progress') : 
+                  'not-started',
+                _id: topic._id,
                 topics: [{
                   title: topic.title,
                   description: topic.description,
+                  _id: topic._id, // Make sure _id is correctly passed
                   video: {
-                    title: topic.title,
+                    title: videos.length > 0 ? videos[0].title : topic.title,
                     isPlaylist: true,
                     videos: videos,
                     url: videos.length > 0 ? videos[0].url : null
@@ -150,14 +233,29 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
             })
           };
           
+          console.log('Formatted roadmap for frontend:', formattedRoadmap);
+          
           setRoadmap(formattedRoadmap);
           
-          // Load progress data
-          const savedProgress = localStorage.getItem('roadmapProgress');
-          if (savedProgress) {
-            const progressData = JSON.parse(savedProgress);
-            setCompletedVideos(progressData.completedVideos || {});
-            setVideoNotes(progressData.videoNotes || {});
+          // Initialize progress tracking
+          if (roadmapData.topics && roadmapData.topics.length > 0) {
+            // Create completed videos map based on completedResourceIds
+            const completedVideosFromServer = {};
+            
+            roadmapData.topics.forEach(topic => {
+              if (topic.completedResourceIds && topic.completedResourceIds.length > 0) {
+                // Mark each completed resource as completed
+                topic.completedResourceIds.forEach(resourceId => {
+                  completedVideosFromServer[resourceId] = true;
+                });
+              }
+            });
+            
+            console.log('Initialized video completion from server:', completedVideosFromServer);
+            setCompletedVideos(completedVideosFromServer);
+          } else {
+            // No topics with resources
+            setCompletedVideos({});
           }
           
           setLoading(false);
@@ -173,29 +271,45 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
       // Original code for loading from localStorage
       const loadRoadmap = () => {
         try {
-          setLoading(true);
-          const storedRoadmap = localStorage.getItem('roadmapData');
+          // Get roadmap data from localStorage
+          const roadmapData = JSON.parse(localStorage.getItem('roadmapData'));
           
-          if (!storedRoadmap) {
-            navigate('/');
+          if (!roadmapData) {
+            setError('No roadmap data found');
+            setLoading(false);
             return;
           }
           
-          const roadmapData = JSON.parse(storedRoadmap);
-          setRoadmap(roadmapData);
+          console.log('Loaded roadmap data:', roadmapData);
           
-          // Load progress data
-          const savedProgress = localStorage.getItem('roadmapProgress');
-          if (savedProgress) {
-            const progressData = JSON.parse(savedProgress);
-            setCompletedVideos(progressData.completedVideos || {});
-            setVideoNotes(progressData.videoNotes || {});
+          // Ensure the isCustom flag is preserved
+          if (roadmapData.isCustom === undefined && fromSaved && isCustom) {
+            roadmapData.isCustom = true;
           }
           
+          // Always set the roadmap data first to ensure UI is responsive
+          setRoadmap(roadmapData);
           setLoading(false);
+          
+          // Then try to save to database in the background if authenticated
+          if (isAuthenticated && user) {
+            console.log('Auto-saving roadmap with resources...');
+            saveRoadmapToDatabase()
+              .then(savedResult => {
+                if (savedResult && savedResult._id) {
+                  console.log('Roadmap saved successfully, redirecting...');
+                  // Redirect to the roadmap resources page with the ID to load from database
+                  navigate(`/roadmaps/${savedResult._id}/resources${roadmapData.isCustom ? '?isCustom=true' : ''}`);
+                }
+              })
+              .catch(saveError => {
+                console.error('Error saving roadmap to database:', saveError);
+                // Already showing the roadmap, so no further action needed
+              });
+          }
         } catch (error) {
-          console.error('Error loading roadmap data:', error);
-          setError('Failed to load roadmap data. Please try again.');
+          console.error('Error loading roadmap:', error);
+          setError('Failed to load roadmap data');
           setLoading(false);
         }
       };
@@ -237,16 +351,12 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
     }
   }, [fromSaved, id, isAuthenticated]);
 
-  // Save progress to localStorage whenever it changes
+  // Save notes to localStorage whenever they change
   useEffect(() => {
-    if (roadmap) {
-      localStorage.setItem('roadmapProgress', JSON.stringify({
-        completedVideos,
-        videoNotes,
-        noteTimestamps
-      }));
+    if (roadmap && videoNotes) {
+      localStorage.setItem('videoNotes', JSON.stringify(videoNotes));
     }
-  }, [completedVideos, videoNotes, noteTimestamps, roadmap]);
+  }, [videoNotes, roadmap]);
 
   // Event handlers
   const toggleSection = (sectionId) => {
@@ -256,23 +366,250 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
     }));
   };
 
-  const toggleVideoCompletion = (videoId) => {
-    setCompletedVideos(prev => {
-      const newCompletedVideos = {
-      ...prev,
-      [videoId]: !prev[videoId]
+  // Map a video ID to its parent topic
+  const findVideoParentTopic = (videoId) => {
+    if (!roadmap || !roadmap.sections) {
+      console.error('No roadmap or sections available');
+      return null;
+    }
+    
+    console.log(`Looking for parent topic of video: ${videoId}`);
+    let foundTopic = null;
+    
+    try {
+      // First try to find by exact ID match
+      for (const section of roadmap.sections) {
+        // Check if section has its own _id (might be the topic itself in some structures)
+        if (section._id && section.topics && section.topics.length > 0) {
+          // Get the first topic in the section (this is how the data is structured)
+          const topic = section.topics[0];
+          
+          if (topic && topic.video?.videos) {
+            const matchingVideo = topic.video.videos.find(video => 
+              video.id === videoId || 
+              video._id === videoId || 
+              video.youtubeId === videoId || 
+              (video.url && video.url.includes(videoId))
+            );
+            
+            if (matchingVideo) {
+              console.log(`Found video in section: ${section.title}, _id: ${section._id}`);
+              // Important: Return the section, not the topic, because the section has the MongoDB _id
+              foundTopic = section;
+              break;
+            }
+          }
+        }
+      }
+      
+      // If no exact match found, try to match by YouTube ID in the URL
+      if (!foundTopic && videoId && videoId.length > 8) {
+        for (const section of roadmap.sections) {
+          if (section._id && section.topics && section.topics.length > 0) {
+            const topic = section.topics[0];
+            if (topic && topic.video?.videos) {
+              for (const video of topic.video.videos) {
+                // Extract YouTube ID from URL if present
+                if (video.url) {
+                  const urlMatch = video.url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+                  const youtubeId = urlMatch ? urlMatch[1] : null;
+                  
+                  if (youtubeId === videoId) {
+                    console.log(`Found video by YouTube ID in URL: ${section.title}, _id: ${section._id}`);
+                    foundTopic = section;
+                    break;
+                  }
+                }
+              }
+              if (foundTopic) break;
+            }
+          }
+        }
+      }
+      
+      // Handle MongoDB ObjectId format (24 hex characters)
+      if (!foundTopic && videoId && videoId.length === 24 && /^[0-9a-f]{24}$/i.test(videoId)) {
+        for (const section of roadmap.sections) {
+          if (section._id && section.topics && section.topics.length > 0) {
+            const topic = section.topics[0];
+            if (topic && topic.video?.videos) {
+              for (const video of topic.video.videos) {
+                // Check if any resource has this as _id
+                if (video._id === videoId || video.id === videoId) {
+                  console.log(`Found video by MongoDB ObjectId: ${section.title}, _id: ${section._id}`);
+                  foundTopic = section;
+                  break;
+                }
+              }
+              if (foundTopic) break;
+            }
+          }
+        }
+      }
+      
+      // Final check and debug
+      if (foundTopic) {
+        console.log(`Final found topic: ${foundTopic.title}, _id: ${foundTopic._id}, valid: ${Boolean(foundTopic._id)}`);
+        return foundTopic;
+      } else {
+        // If still no match, log detailed debugging info
+        console.warn(`No parent topic found for video ID: ${videoId}`);
+        console.log('Available videos:');
+        roadmap.sections.forEach((section, sIndex) => {
+          if (section.topics && section.topics.length > 0) {
+            const topic = section.topics[0];
+            if (topic && topic.video?.videos) {
+              topic.video.videos.forEach((video, vIndex) => {
+                console.log(`Section ${sIndex}, Video ${vIndex}: id=${video.id}, _id=${video._id}, url=${video.url}`);
+              });
+            }
+          }
+        });
+        
+        return null;
+      }
+    } catch (error) {
+      console.error('Error in findVideoParentTopic:', error);
+      return null;
+    }
+  };
+  
+  // Remove the old calculateTopicProgress function since we're not using it anymore
+  // Instead, add a function to get the topic progress as a fraction
+  const getTopicProgress = (topic) => {
+    if (!topic || !topic._id) return { completed: 0, total: 0 };
+    
+    // Find the original topic in the roadmap data to get the accurate counts
+    const originalTopic = roadmap?.sections?.flatMap(section => 
+      section.topics || []
+    ).find(t => t._id === topic._id);
+    
+    if (!originalTopic) return { completed: 0, total: 0 };
+    
+    // Count completed videos
+    let completed = 0;
+    let total = 0;
+    
+    if (topic.video?.videos) {
+      total = topic.video.videos.length;
+      completed = topic.video.videos.filter(video => completedVideos[video.id]).length;
+    }
+    
+    return { completed, total };
+  };
+
+  // Toggle video completion status
+  const toggleVideoCompletion = async (videoId) => {
+    try {
+      // Find the parent topic for this video
+      const parentTopic = findVideoParentTopic(videoId);
+      console.log(`Toggle completion for video: ${videoId}`);
+      console.log(`Parent topic: ${parentTopic ? parentTopic.title : 'Not found'} (${parentTopic?._id})`);
+      
+      if (!parentTopic || !parentTopic._id) {
+        console.error(`Could not find parent topic for video: ${videoId}`);
+        toast.error('Error updating progress: Could not find the associated topic');
+        return;
+      }
+      
+      // Toggle completion status
+      const newCompletedVideos = { ...completedVideos };
+      
+      if (newCompletedVideos[videoId]) {
+        delete newCompletedVideos[videoId];
+      } else {
+        newCompletedVideos[videoId] = true;
+      }
+      
+      setCompletedVideos(newCompletedVideos);
+      
+      // Count completed videos for this topic
+      const topicId = parentTopic._id;
+      const topic = roadmap.sections.find(section => section._id === topicId);
+      
+      if (!topic || !topic.topics || !topic.topics[0] || !topic.topics[0].video || !topic.topics[0].video.videos) {
+        console.error('Invalid topic structure');
+        return;
+      }
+      
+      const allTopicVideos = topic.topics[0].video.videos;
+      const totalVideos = allTopicVideos.length;
+      let completedCount = 0;
+      
+      // Count how many videos in this topic are marked as completed
+      allTopicVideos.forEach(video => {
+        if (newCompletedVideos[video.id] || newCompletedVideos[video._id]) {
+          completedCount++;
+        }
+      });
+      
+      console.log(`Topic ${topic.title}: ${completedCount}/${totalVideos} videos completed`);
+      
+      // Update topic progress status
+      const newProgress = completedCount === 0 ? 'not-started' : 
+                          completedCount === totalVideos ? 'completed' : 'in-progress';
+      
+      // Update roadmap state with new progress
+      const updatedSections = roadmap.sections.map(section => {
+        if (section._id === topicId) {
+          return {
+            ...section,
+            progress: newProgress
+          };
+        }
+        return section;
+      });
+      
+      setRoadmap({
+        ...roadmap,
+        sections: updatedSections
+      });
+      
+      // Save to server
+      const completedResourceIds = Object.keys(newCompletedVideos).filter(id => newCompletedVideos[id]);
+      
+      // Format data for the API
+      const updateData = {
+        topicId: topicId,
+        completedResources: completedCount,
+        totalResources: totalVideos,
+        completedResourceIds: completedResourceIds
       };
       
-      // Check for completion after state update
-      setTimeout(() => {
-        const allCompleted = checkAllVideosCompleted(roadmap, newCompletedVideos);
-        if (allCompleted && !showCelebration) {
-          triggerCelebration(setShowCelebration);
-        }
-      }, 0);
+      console.log('Sending progress update to server:', updateData);
       
-      return newCompletedVideos;
-    });
+      try {
+        // Call API to update progress
+        const response = await updateRoadmapProgress(id, updateData);
+        
+        if (response.status === 200) {
+          // Success, but don't show toast for every update
+          console.log('Progress updated successfully');
+        } else {
+          console.error('Error updating progress:', response);
+          toast.error('Failed to save your progress');
+        }
+      } catch (apiError) {
+        console.error('API error updating progress:', apiError);
+        
+        // If the API call fails but we're in a newly created roadmap scenario,
+        // save the progress locally until the next successful API call
+        if (fromSaved) {
+          console.log('Saving progress locally as fallback');
+          saveRoadmapProgress({
+            roadmapId: id,
+            topicId: topicId,
+            videoId: videoId,
+            isCompleted: newCompletedVideos[videoId] || false
+          });
+        }
+        
+        toast.error('Failed to save progress to server. Changes saved locally.');
+      }
+    } catch (error) {
+      console.error('Error toggling video completion:', error);
+      toast.error('Failed to update progress');
+    }
   };
 
   const openNoteModal = (videoId) => {
@@ -516,6 +853,7 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
         description: roadmap.description,
         category: roadmap.category || 'Web Development',
         difficulty: roadmap.difficulty || 'Intermediate',
+        isCustom: true, // Always set isCustom to true for custom roadmaps
         topics: roadmap.sections?.map(section => {
           // Check if this section has video resources
           const hasResources = section.topics?.[0]?.video?.videos && section.topics[0].video.videos.length > 0;
@@ -528,7 +866,8 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
               // Safely parse duration
               let durationInSeconds = 0;
               if (video.duration) {
-                if (typeof video.duration === 'string' && video.duration.includes(':')) {
+                if (typeof video.duration === 'string') {
+                  if (video.duration.includes(':')) {
                   const parts = video.duration.split(':');
                   if (parts.length === 3) {
                     // Handle HH:MM:SS format
@@ -539,11 +878,18 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
                   } else {
                     // Handle single number (seconds)
                     durationInSeconds = parseInt(parts[0]);
+                    }
+                  } else {
+                    // Handle numeric string without colons (like "15275")
+                    durationInSeconds = parseInt(video.duration);
                   }
                 } else if (typeof video.duration === 'number') {
                   durationInSeconds = video.duration;
                 }
               }
+              
+              // Log the duration conversion for debugging
+              console.log(`Converting duration for ${video.title}: ${video.duration} → ${durationInSeconds}`);
               
               return {
                 title: video.title,
@@ -646,6 +992,7 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
             </div>
           </div>
         </div>
+        <ChatbotWrapper />
       </div>
     );
   }
@@ -797,25 +1144,32 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
           video={currentVideo}
           isOpen={true}
           onClose={closeVideoModal}
+          onToggleComplete={toggleVideoCompletion}
+          isCompleted={currentVideo ? completedVideos[currentVideo.id] : false}
+          onAddNote={openNoteModal}
+          hasNote={currentVideo ? !!videoNotes[currentVideo.id] : false}
         />
       )}
 
-      {/* Only render NotesModal when it's open */}
-      {noteModalOpen && (
-        <NotesModal
-          isOpen={true}
-          onClose={closeNoteModal}
-          onSave={saveNote}
-          onDelete={deleteNote}
-          note={currentNote}
-          onNoteChange={setCurrentNote}
-          videoTitle={currentVideo?.title}
-          lastEdited={editingNote ? noteTimestamps[editingNote] : null}
-        />
-      )}
-
-      {/* Only render CelebrationModal when it's open */}
-      {showCelebration && <CelebrationModal isOpen={true} />}
+      {/* Notes Modal */}
+      <NotesModal 
+        isOpen={noteModalOpen}
+        onClose={closeNoteModal}
+        onSave={saveNote}
+        onDelete={deleteNote}
+        note={currentNote}
+        onNoteChange={setCurrentNote}
+        videoTitle={currentVideo?.title}
+        lastEdited={editingNote ? noteTimestamps[editingNote] : null}
+      />
+      
+      {/* Celebration Modal */}
+      <CelebrationModal 
+        isOpen={showCelebration} 
+        onClose={() => setShowCelebration(false)} 
+      />
+      
+      <ChatbotWrapper />
     </div>
   );
 };

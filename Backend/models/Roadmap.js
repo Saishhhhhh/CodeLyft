@@ -12,7 +12,7 @@ const ResourceSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['video', 'playlist', 'article'],
+    enum: ['video', 'article', 'course', 'book', 'documentation', 'other'],
     default: 'video'
   },
   description: {
@@ -24,8 +24,21 @@ const ResourceSchema = new mongoose.Schema({
     default: ''
   },
   source: {
-    type: String,
-    default: 'YouTube'
+    type: mongoose.Schema.Types.Mixed,
+    get: function(data) {
+      // If it's an object with a name property, return just the name
+      if (data && typeof data === 'object' && data.name) {
+        return data.name;
+      }
+      return data || '';
+    },
+    set: function(data) {
+      // If it's an object with a name property, store the whole object
+      if (data && typeof data === 'object' && data.name) {
+        return data;
+      }
+      return data || '';
+    }
   },
   duration: {
     type: Number,
@@ -45,7 +58,7 @@ const TopicSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    default: ''
   },
   order: {
     type: Number,
@@ -56,14 +69,21 @@ const TopicSchema = new mongoose.Schema({
     enum: ['beginner', 'intermediate', 'advanced'],
     default: 'intermediate'
   },
-  progress: {
-    type: String,
-    enum: ['not-started', 'in-progress', 'completed'],
-    default: 'not-started'
+  completedResources: {
+    type: Number,
+    default: 0
+  },
+  totalResources: {
+    type: Number,
+    default: 0
   },
   hasGeneratedResources: {
     type: Boolean,
     default: false
+  },
+  completedResourceIds: {
+    type: [String],
+    default: []
   },
   resources: [ResourceSchema]
 });
@@ -76,7 +96,7 @@ const AdvancedTopicSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    default: ''  // Changed from required to default empty string
   }
 });
 
@@ -88,7 +108,7 @@ const ProjectSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    default: ''  // Changed from required to default empty string
   },
   difficulty: {
     type: String,
@@ -110,7 +130,7 @@ const RoadmapSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    default: ''  // Changed from required to default empty string
   },
   category: {
     type: String,
@@ -123,6 +143,10 @@ const RoadmapSchema = new mongoose.Schema({
     enum: ['Beginner', 'Intermediate', 'Advanced']
   },
   isPublic: {
+    type: Boolean,
+    default: false
+  },
+  isCustom: {
     type: Boolean,
     default: false
   },
@@ -139,13 +163,49 @@ const RoadmapSchema = new mongoose.Schema({
   }
 });
 
-// Method to calculate completion percentage
+// Method to calculate completion percentage based on numerical progress
 RoadmapSchema.methods.updateCompletionPercentage = function() {
   if (this.topics.length === 0) return 0;
   
-  const completed = this.topics.filter(topic => topic.progress === 'completed').length;
-  this.completionPercentage = Math.round((completed / this.topics.length) * 100);
+  let totalCompleted = 0;
+  let totalResources = 0;
+  
+  this.topics.forEach(topic => {
+    totalCompleted += topic.completedResources;
+    totalResources += topic.totalResources;
+  });
+  
+  this.completionPercentage = totalResources > 0 ? Math.round((totalCompleted / totalResources) * 100) : 0;
   return this.completionPercentage;
 };
+
+// Pre-save middleware to update totalResources based on resources length
+RoadmapSchema.pre('save', function(next) {
+  // Update totalResources for each topic if not already set
+  if (this.topics && this.topics.length > 0) {
+    this.topics.forEach(topic => {
+      if (topic.resources && topic.resources.length > 0) {
+        // Only update if totalResources is 0 or not set
+        if (!topic.totalResources || topic.totalResources === 0) {
+          topic.totalResources = topic.resources.length;
+          console.log(`Updated totalResources for topic ${topic.title}: ${topic.totalResources}`);
+        }
+      }
+    });
+  }
+  
+  // Same for advanced topics
+  if (this.advancedTopics && this.advancedTopics.length > 0) {
+    this.advancedTopics.forEach(topic => {
+      if (topic.resources && topic.resources.length > 0) {
+        if (!topic.totalResources || topic.totalResources === 0) {
+          topic.totalResources = topic.resources.length;
+        }
+      }
+    });
+  }
+  
+  next();
+});
 
 module.exports = mongoose.model('RoadmapSimplified', RoadmapSchema); 

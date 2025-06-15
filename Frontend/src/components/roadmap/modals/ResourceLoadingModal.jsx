@@ -21,10 +21,10 @@ const ResourceLoadingModal = ({
         <div className="p-6 bg-gradient-to-r from-indigo-600 to-purple-600">
           <div className="flex items-center">
             <FaYoutube className="text-white text-3xl mr-3" />
-            <h2 className="text-2xl font-bold text-white">Generating YouTube Resources</h2>
+            <h2 className="text-2xl font-bold text-white">Finding Learning Resources</h2>
           </div>
           <p className="text-indigo-100 mt-2">
-            Finding the best learning resources for your roadmap. This may take a few minutes...
+            Finding the best YouTube resources for remaining topics in your roadmap...
           </p>
         </div>
 
@@ -105,7 +105,7 @@ const ResourceLoadingModal = ({
         
         <div className="bg-gray-50 px-6 py-4 flex justify-between items-center">
           <div className="text-sm text-gray-500">
-            This may take a few minutes depending on the number of topics
+            We're adding resources for topics without user-provided content
           </div>
           <div className="flex items-center text-indigo-600">
             <FaSpinner className="animate-spin mr-2" />

@@ -218,39 +218,24 @@ async def match_technologies(
     tech1: str = Query(..., description="First technology name"),
     tech2: str = Query(..., description="Second technology name")
 ):
-    """Check if two technology names are equivalent using semantic similarity"""
-    if not HAS_SENTENCE_TRANSFORMERS or tech_model is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Technology matching is unavailable. The sentence-transformers module is not installed or the model failed to load."
-        )
-    
+    """Check if two technology names are equivalent"""
     try:
-        # Quick check for exact matches
-        if tech1.lower() == tech2.lower():
-            return TechnologyMatchResponse(
-                areEquivalent=True,
-                similarity=1.0,
-                explanation=f"Exact match between '{tech1}' and '{tech2}'"
-            )
+        # Import the technology matcher module
+        import technology_matcher
         
-        # Calculate similarity
-        similarity = get_similarity(tech1, tech2)
+        # Use the technology_matcher directly
+        request = technology_matcher.TechnologyMatchRequest(tech1=tech1, tech2=tech2)
+        result = await technology_matcher.match_technologies(request)
         
-        # Determine if technologies are equivalent
-        are_equivalent = similarity >= SIMILARITY_THRESHOLD
-        
-        # Generate explanation
-        explanation = generate_explanation(tech1, tech2, similarity)
-        
-        return TechnologyMatchResponse(
-            areEquivalent=are_equivalent,
-            similarity=similarity,
-            explanation=explanation
-        )
+        return result
     except Exception as e:
         logger.error(f"Error matching technologies: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        traceback.print_exc()
+        return TechnologyMatchResponse(
+            areEquivalent=False,
+            similarity=get_similarity(tech1, tech2),
+            explanation=f"Error during technology matching: {str(e)}"
+        )
 
 # API Routes - Use Dict[str, Any] for all responses instead of Pydantic models
 @app.get("/video/details", tags=["Video"])

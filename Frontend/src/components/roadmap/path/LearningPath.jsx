@@ -44,7 +44,7 @@ const cardVariants = {
   }
 };
 
-const LearningPath = ({ sections, editMode }) => {
+const LearningPath = ({ sections, editMode, isCustom = false }) => {
   return (
     <motion.div variants={itemVariants} className="mb-12 mt-0">
       <div className="flex items-center justify-center mb-4">
@@ -61,7 +61,7 @@ const LearningPath = ({ sections, editMode }) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          Learning Journey Path
+          {isCustom ? "Custom Learning Path" : "Learning Journey Path"}
         </motion.h2>
       </div>
 
@@ -144,7 +144,8 @@ const LearningPath = ({ sections, editMode }) => {
                                     {section.difficulty}
                                   </span>
                                 </div>
-                                {topic.video && !editMode && (
+                                {/* Only show video links for non-custom roadmaps */}
+                                {topic.video && !editMode && !isCustom && (
                                   <div className={`flex-shrink-0 ${index % 2 === 0 ? 'mr-4' : 'ml-4'}`}>
                                     <a 
                                       href={topic.video.url} 
@@ -160,6 +161,15 @@ const LearningPath = ({ sections, editMode }) => {
                                         {topic.video.videoCount} videos
                                       </span>
                                     )}
+                                  </div>
+                                )}
+                                
+                                {/* Show indicator when resources are stored but not displayed (custom roadmap) */}
+                                {isCustom && topic.hasResources && (
+                                  <div className={`flex-shrink-0 ${index % 2 === 0 ? 'mr-4' : 'ml-4'}`}>
+                                    <span className="inline-block px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                                      Resources Stored
+                                    </span>
                                   </div>
                                 )}
                               </div>

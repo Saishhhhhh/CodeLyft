@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getUserRoadmaps, deleteRoadmap } from '../services/roadmapService';
 import { useAuth } from '../context/AuthContext';
+import { useCustomRoadmap } from '../context/CustomRoadmapContext';
 import Navbar from '../components/Navbar';
 import ImportRoadmapModal from '../components/roadmap/ImportRoadmapModal';
-import { FaTrash, FaEdit, FaEye, FaPlus, FaRoad, FaYoutube, FaBookOpen, FaChevronRight, FaFileImport } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaEye, FaPlus, FaRoad, FaYoutube, FaBookOpen, FaChevronRight, FaFileImport, FaTools } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import ChatbotWrapper from '../components/chatbot/ChatbotWrapper';
 
 const MyRoadmapsPage = () => {
   const [roadmaps, setRoadmaps] = useState([]);
@@ -13,6 +15,7 @@ const MyRoadmapsPage = () => {
   const [error, setError] = useState(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const { isAuthenticated, user } = useAuth();
+  const { savedRoadmaps, loadSavedRoadmaps, deleteSavedRoadmap, isLoading: isLoadingCustomRoadmaps } = useCustomRoadmap();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,12 +28,23 @@ const MyRoadmapsPage = () => {
     const fetchRoadmaps = async () => {
       try {
         setLoading(true);
+        // Load regular roadmaps
         const response = await getUserRoadmaps();
-        setRoadmaps(response.data || []);
+        if (response && response.data) {
+          setRoadmaps(response.data || []);
+        } else {
+          setRoadmaps([]);
+          console.warn('No regular roadmaps data returned');
+        }
+        
+        // No need to await this, it will update state when complete
+        loadSavedRoadmaps();
+        
         setError(null);
       } catch (err) {
         console.error('Error fetching roadmaps:', err);
         setError('Failed to load your roadmaps. Please try again later.');
+        setRoadmaps([]); // Set to empty array on error
       } finally {
         setLoading(false);
       }
@@ -57,6 +71,23 @@ const MyRoadmapsPage = () => {
     }
   };
 
+  const handleDeleteCustomRoadmap = async (id, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!window.confirm('Are you sure you want to delete this custom roadmap? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await deleteSavedRoadmap(id);
+      toast.success('Custom roadmap deleted successfully');
+    } catch (err) {
+      console.error('Error deleting custom roadmap:', err);
+      toast.error('Failed to delete custom roadmap');
+    }
+  };
+
   const handleImportSuccess = (newRoadmap) => {
     setRoadmaps([newRoadmap, ...roadmaps]);
   };
@@ -78,6 +109,18 @@ const MyRoadmapsPage = () => {
   const roadmapsWithoutResources = roadmaps.filter(roadmap => 
     !roadmap.topics || !roadmap.topics.some(topic => topic.hasGeneratedResources)
   );
+  
+  // Filter custom roadmaps based on whether they have video resources
+  const customRoadmapsWithResources = savedRoadmaps.filter(roadmap => 
+    roadmap.topics && roadmap.topics.some(topic => topic.video)
+  );
+  
+  const customRoadmapsWithoutResources = savedRoadmaps.filter(roadmap => 
+    !roadmap.topics || !roadmap.topics.some(topic => topic.video)
+  );
+
+  // Show loading state if either regular or custom roadmaps are loading
+  const isLoadingAll = loading || isLoadingCustomRoadmaps;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,7 +144,7 @@ const MyRoadmapsPage = () => {
           </div>
         </div>
 
-        {loading && (
+        {isLoadingAll && (
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
@@ -113,7 +156,7 @@ const MyRoadmapsPage = () => {
           </div>
         )}
 
-        {!loading && !error && roadmaps.length === 0 && (
+        {!isLoadingAll && !error && roadmaps.length === 0 && savedRoadmaps.length === 0 && (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <FaRoad className="mx-auto text-gray-400 text-5xl mb-4" />
             <h2 className="text-2xl font-semibold text-gray-700 mb-2">You don't have any roadmaps yet</h2>
@@ -131,21 +174,42 @@ const MyRoadmapsPage = () => {
               >
                 <FaPlus className="mr-2" /> Create a Roadmap
               </Link>
+              <Link 
+                to="/custom-roadmap"
+                className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              >
+                <FaTools className="mr-2" /> Create Custom Roadmap
+              </Link>
             </div>
           </div>
         )}
 
-        {!loading && !error && roadmaps.length > 0 && (
+        {!isLoadingAll && !error && (roadmaps.length > 0 || savedRoadmaps.length > 0) && (
           <div className="space-y-10">
+            {/* Add new custom roadmap card - always show this */}
+            <div className="mb-8">
+              <Link 
+                to="/custom-roadmap"
+                className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden border-l-4 border-green-500 border-dashed max-w-md mx-auto"
+              >
+                <div className="p-6 flex flex-col items-center justify-center">
+                  <FaPlus className="text-green-500 text-4xl mb-4" />
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">Create New Custom Roadmap</h3>
+                  <p className="text-gray-500 text-center">Build a personalized roadmap with YouTube resources</p>
+                </div>
+              </Link>
+            </div>
+
             {/* Section for roadmaps with resources */}
-            <div>
-              <div className="flex items-center mb-4">
-                <FaYoutube className="text-purple-600 text-xl mr-2" />
-                <h2 className="text-2xl font-bold text-gray-800">Roadmaps with Resources</h2>
-              </div>
-              
-              {roadmapsWithResources.length > 0 ? (
+            {(roadmapsWithResources.length > 0 || customRoadmapsWithResources.length > 0) && (
+              <div>
+                <div className="flex items-center mb-4">
+                  <FaYoutube className="text-purple-600 text-xl mr-2" />
+                  <h2 className="text-2xl font-bold text-gray-800">Roadmaps with Resources</h2>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Regular roadmaps with resources */}
                   {roadmapsWithResources.map((roadmap) => (
                     <Link 
                       key={roadmap._id} 
@@ -155,9 +219,15 @@ const MyRoadmapsPage = () => {
                       <div className="p-6">
                         <div className="flex justify-between items-start">
                           <h2 className="text-xl font-semibold text-gray-800 mb-2">{roadmap.title}</h2>
-                          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${difficultyColor(roadmap.difficulty)}`}>
-                            {roadmap.difficulty}
-                          </span>
+                          {roadmap.isCustom ? (
+                            <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
+                              Custom
+                            </span>
+                          ) : (
+                            <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${difficultyColor(roadmap.difficulty)}`}>
+                              {roadmap.difficulty}
+                            </span>
+                          )}
                         </div>
                         <p className="text-gray-600 mb-4 line-clamp-2">{roadmap.description}</p>
                         <div className="flex justify-between items-center">
@@ -165,17 +235,6 @@ const MyRoadmapsPage = () => {
                             Created: {new Date(roadmap.createdAt).toLocaleDateString()}
                           </span>
                           <div className="flex space-x-2">
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate(`/roadmaps/${roadmap._id}/edit`, { state: { roadmap } });
-                              }}
-                              className="p-2 text-blue-600 hover:text-blue-800"
-                              title="Edit roadmap"
-                            >
-                              <FaEdit />
-                            </button>
                             <button 
                               onClick={(e) => handleDeleteRoadmap(roadmap._id, e)}
                               className="p-2 text-red-600 hover:text-red-800"
@@ -196,58 +255,86 @@ const MyRoadmapsPage = () => {
                           )}
                           <button 
                             className="inline-flex items-center text-sm font-medium text-purple-600 hover:text-purple-800"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              // Navigate to the dedicated resources page
-                              navigate(`/roadmaps/${roadmap._id}/resources`);
-                            }}
                           >
-                            View Resources <FaYoutube className="ml-1" />
+                            View Resources <FaChevronRight className="ml-1" size={12} />
                           </button>
                         </div>
                       </div>
                     </Link>
                   ))}
-                </div>
-              ) : (
-                <div className="bg-white rounded-lg shadow p-6 text-center">
-                  <p className="text-gray-500 mb-4">You don't have any roadmaps with resources yet.</p>
-                  <p className="text-gray-500 mb-4">Generate resources for your roadmaps by clicking "Start YouTube Journey" on a roadmap.</p>
-                </div>
-              )}
 
-              {/* Import button at bottom of section */}
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={() => setImportModalOpen(true)}
-                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-                >
-                  <FaFileImport className="mr-2" /> Import Another Roadmap
-                </button>
+                  {/* Custom roadmaps with resources */}
+                  {customRoadmapsWithResources.map((roadmap) => (
+                    <Link 
+                      key={roadmap._id || roadmap.id} 
+                      to={`/roadmaps/${roadmap._id || roadmap.id}/custom`}
+                      className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
+                    >
+                      <div className="p-6">
+                        <div className="flex justify-between items-start">
+                          <h2 className="text-xl font-semibold text-gray-800 mb-2">{roadmap.name}</h2>
+                          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
+                            Custom
+                          </span>
+                        </div>
+                        <p className="text-gray-600 mb-4 line-clamp-2">{roadmap.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">
+                            Topics: {roadmap.topics?.length || 0}
+                          </span>
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={(e) => handleDeleteCustomRoadmap(roadmap._id || roadmap.id, e)}
+                              className="p-2 text-red-600 hover:text-red-800"
+                              title="Delete custom roadmap"
+                            >
+                              <FaTrash />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-gray-100 px-6 py-3 flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Custom Roadmap</span>
+                        <button 
+                          className="inline-flex items-center text-sm font-medium text-purple-600 hover:text-purple-800"
+                        >
+                          View Resources <FaChevronRight className="ml-1" size={12} />
+                        </button>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             
             {/* Section for roadmaps without resources */}
-            <div>
-              <div className="flex items-center mb-4">
-                <FaBookOpen className="text-blue-600 text-xl mr-2" />
-                <h2 className="text-2xl font-bold text-gray-800">Roadmaps without Resources</h2>
-              </div>
-              
-              {roadmapsWithoutResources.length > 0 ? (
+            {(roadmapsWithoutResources.length > 0 || customRoadmapsWithoutResources.length > 0) && (
+              <div>
+                <div className="flex items-center mb-4">
+                  <FaBookOpen className="text-blue-600 text-xl mr-2" />
+                  <h2 className="text-2xl font-bold text-gray-800">Roadmaps Without Resources</h2>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Regular roadmaps without resources */}
                   {roadmapsWithoutResources.map((roadmap) => (
                     <Link 
                       key={roadmap._id} 
-                      to={`/roadmaps/${roadmap._id}/view`}
+                      to={`/roadmaps/${roadmap._id}`}
                       className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
                     >
                       <div className="p-6">
                         <div className="flex justify-between items-start">
                           <h2 className="text-xl font-semibold text-gray-800 mb-2">{roadmap.title}</h2>
-                          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${difficultyColor(roadmap.difficulty)}`}>
-                            {roadmap.difficulty}
-                          </span>
+                          {roadmap.isCustom ? (
+                            <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
+                              Custom
+                            </span>
+                          ) : (
+                            <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${difficultyColor(roadmap.difficulty)}`}>
+                              {roadmap.difficulty}
+                            </span>
+                          )}
                         </div>
                         <p className="text-gray-600 mb-4 line-clamp-2">{roadmap.description}</p>
                         <div className="flex justify-between items-center">
@@ -255,17 +342,6 @@ const MyRoadmapsPage = () => {
                             Created: {new Date(roadmap.createdAt).toLocaleDateString()}
                           </span>
                           <div className="flex space-x-2">
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate(`/roadmaps/${roadmap._id}/edit`, { state: { roadmap } });
-                              }}
-                              className="p-2 text-blue-600 hover:text-blue-800"
-                              title="Edit roadmap"
-                            >
-                              <FaEdit />
-                            </button>
                             <button 
                               onClick={(e) => handleDeleteRoadmap(roadmap._id, e)}
                               className="p-2 text-red-600 hover:text-red-800"
@@ -288,43 +364,90 @@ const MyRoadmapsPage = () => {
                             className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
                             onClick={(e) => {
                               e.preventDefault();
-                              // Navigate to the dedicated view page
-                              navigate(`/roadmaps/${roadmap._id}/view`);
+                              e.stopPropagation();
+                              navigate(`/roadmaps/${roadmap._id}/generate-resources`, { state: { roadmap } });
                             }}
                           >
-                            View Roadmap <FaChevronRight className="ml-1" />
+                            Generate Resources <FaChevronRight className="ml-1" size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+
+                  {/* Custom roadmaps without resources */}
+                  {customRoadmapsWithoutResources.map((roadmap) => (
+                    <Link 
+                      key={roadmap._id || roadmap.id} 
+                      to={`/roadmaps/${roadmap._id || roadmap.id}/custom`}
+                      className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
+                    >
+                      <div className="p-6">
+                        <div className="flex justify-between items-start">
+                          <h2 className="text-xl font-semibold text-gray-800 mb-2">{roadmap.name}</h2>
+                          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
+                            Custom
+                          </span>
+                        </div>
+                        <p className="text-gray-600 mb-4 line-clamp-2">{roadmap.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">
+                            Topics: {roadmap.topics?.length || 0}
+                          </span>
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate('/custom-roadmap', { state: { roadmap } });
+                              }}
+                              className="p-2 text-blue-600 hover:text-blue-800"
+                              title="Edit custom roadmap"
+                            >
+                              <FaEdit />
+                            </button>
+                            <button 
+                              onClick={(e) => handleDeleteCustomRoadmap(roadmap._id || roadmap.id, e)}
+                              className="p-2 text-red-600 hover:text-red-800"
+                              title="Delete custom roadmap"
+                            >
+                              <FaTrash />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-gray-100 px-6 py-3 flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Custom Roadmap</span>
+                        <div className="flex items-center">
+                          <button 
+                            className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              navigate(`/roadmaps/${roadmap._id || roadmap.id}/custom`, { state: { roadmap } });
+                            }}
+                          >
+                            View Details <FaChevronRight className="ml-1" size={12} />
                           </button>
                         </div>
                       </div>
                     </Link>
                   ))}
                 </div>
-              ) : (
-                <div className="bg-white rounded-lg shadow p-6 text-center">
-                  <p className="text-gray-500">You don't have any roadmaps without resources.</p>
-                </div>
-              )}
-
-              {/* Import button at bottom of section */}
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={() => setImportModalOpen(true)}
-                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-                >
-                  <FaFileImport className="mr-2" /> Import Another Roadmap
-                </button>
               </div>
-            </div>
+            )}
           </div>
         )}
-        
-        {/* Import Roadmap Modal */}
-        <ImportRoadmapModal 
-          isOpen={importModalOpen}
-          onClose={() => setImportModalOpen(false)}
-          onSuccess={handleImportSuccess}
-        />
       </div>
+      
+      {/* Import Modal */}
+      <ImportRoadmapModal 
+        isOpen={importModalOpen} 
+        onClose={() => setImportModalOpen(false)} 
+        onSuccess={handleImportSuccess}
+      />
+      
+      <ChatbotWrapper />
     </div>
   );
 };

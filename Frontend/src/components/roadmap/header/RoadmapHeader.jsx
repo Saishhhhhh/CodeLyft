@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FaFlag, FaMountain } from 'react-icons/fa';
+import { FaFlag, FaMountain, FaEdit, FaFileExport } from 'react-icons/fa';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -25,7 +25,7 @@ const itemVariants = {
   }
 };
 
-const RoadmapHeader = ({ title, description }) => {
+const RoadmapHeader = ({ title, description, onExport, hasResources, isCustom = false }) => {
   return (
     <motion.div 
       initial="hidden"
@@ -33,6 +33,8 @@ const RoadmapHeader = ({ title, description }) => {
       variants={containerVariants}
       className="max-w-7xl mx-auto px-4 pt-24 pb-16 relative"
     >
+      {/* Custom Roadmap indicator now integrated into the title display */}
+
       {/* Header Section */}
       <motion.div variants={itemVariants} className="text-center mb-20">
         <div className="relative inline-block">
@@ -66,6 +68,8 @@ const RoadmapHeader = ({ title, description }) => {
         >
           {description}
         </motion.p>
+
+        {/* Export button removed */}
 
         {/* Journey Path Visualization */}
         <motion.div 

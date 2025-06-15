@@ -120,8 +120,12 @@ const sharedResourceTopics = new Map(); // New map to track topics for each reso
  * @returns {Promise<boolean>} - Whether the technologies are equivalent
  */
 const areTechnologiesEquivalent = async (tech1, tech2) => {
+  // Normalize technology names to remove duplicated words
+  const normalizedTech1 = normalizeTechName(tech1);
+  const normalizedTech2 = normalizeTechName(tech2);
+  
   // Quick check for exact matches or simple cases
-  if (tech1.toLowerCase() === tech2.toLowerCase()) {
+  if (normalizedTech1.toLowerCase() === normalizedTech2.toLowerCase()) {
     return true;
   }
   
@@ -132,10 +136,10 @@ const areTechnologiesEquivalent = async (tech1, tech2) => {
   
   while (retryCount < maxRetries) {
     try {
-      console.log(`Checking if technologies are equivalent: "${tech1}" and "${tech2}" (Attempt ${retryCount + 1}/${maxRetries})`);
+      console.log(`Checking if technologies are equivalent: "${normalizedTech1}" and "${normalizedTech2}" (Attempt ${retryCount + 1}/${maxRetries})`);
       
       // Call the tech matcher API
-      const response = await fetch(`${TECH_MATCHER_API_URL}/match?tech1=${encodeURIComponent(tech1)}&tech2=${encodeURIComponent(tech2)}`);
+      const response = await fetch(`${TECH_MATCHER_API_URL}/match?tech1=${encodeURIComponent(normalizedTech1)}&tech2=${encodeURIComponent(normalizedTech2)}`);
 
       if (!response.ok) {
         throw new Error(`API returned status: ${response.status}`);
@@ -162,11 +166,11 @@ const areTechnologiesEquivalent = async (tech1, tech2) => {
       
       // If all retries fail, use fallback method
       console.log('Using fallback technology matching method');
-      return fallbackAreTechnologiesEquivalent(tech1, tech2);
+      return fallbackAreTechnologiesEquivalent(normalizedTech1, normalizedTech2);
     }
   }
   
-  return fallbackAreTechnologiesEquivalent(tech1, tech2);
+  return fallbackAreTechnologiesEquivalent(normalizedTech1, normalizedTech2);
 };
 
 /**
@@ -184,6 +188,18 @@ const fallbackAreTechnologiesEquivalent = (tech1, tech2) => {
   };
   
   return normalizeTech(tech1) === normalizeTech(tech2);
+};
+
+/**
+ * Normalize a technology name to remove duplicated words
+ * @param {string} tech - The technology name to normalize
+ * @returns {string} - The normalized technology name
+ */
+const normalizeTechName = (tech) => {
+  // Remove duplicated words (e.g., "Git Git" -> "Git")
+  const words = tech.split(' ');
+  const uniqueWords = [...new Set(words)];
+  return uniqueWords.join(' ');
 };
 
 /**
@@ -387,6 +403,78 @@ export const getPlaylistVideos = async (playlistUrl, limit = 0, maxDetails = 999
     console.error('Error fetching playlist videos:', error);
     throw error;
   }
+};
+
+/**
+ * Fetch real durations for videos in a playlist
+ * @param {Array} videos - Array of video objects
+ * @returns {Promise<Array>} - Updated videos with real durations
+ */
+export const fetchRealDurations = async (videos) => {
+  if (!videos || videos.length === 0) return videos;
+  
+  console.log(`Fetching real durations for ${videos.length} videos`);
+  
+  // Only process videos that have placeholder durations
+  const placeholderDurations = ['0:01', '0:00', '00:01', '00:00', 0, 1];
+  const videosToUpdate = videos.filter(video => 
+    placeholderDurations.includes(video.duration) || 
+    placeholderDurations.includes(video.duration_seconds)
+  );
+  
+  if (videosToUpdate.length === 0) {
+    console.log('No videos with placeholder durations found');
+    return videos;
+  }
+  
+  console.log(`Found ${videosToUpdate.length} videos with placeholder durations`);
+  
+  // Process in batches to avoid overloading the API
+  const batchSize = 5;
+  const updatedVideos = [...videos]; // Create a copy to update
+  
+  for (let i = 0; i < videosToUpdate.length; i += batchSize) {
+    const batch = videosToUpdate.slice(i, i + batchSize);
+    const promises = batch.map(video => getVideoDetails(video.url).catch(err => null));
+    
+    try {
+      const results = await Promise.all(promises);
+      
+      // Update videos with real durations
+      results.forEach((result, index) => {
+        if (!result) return; // Skip if we couldn't get details
+        
+        const videoToUpdate = batch[index];
+        const videoIndex = updatedVideos.findIndex(v => v.id === videoToUpdate.id);
+        
+        if (videoIndex !== -1) {
+          // Update duration information
+          if (result.duration_seconds) {
+            updatedVideos[videoIndex].duration_seconds = result.duration_seconds;
+            
+            // Format duration string
+            const minutes = Math.floor(result.duration_seconds / 60);
+            const seconds = result.duration_seconds % 60;
+            updatedVideos[videoIndex].duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          } else if (result.duration_string) {
+            updatedVideos[videoIndex].duration = result.duration_string;
+          }
+          
+          console.log(`Updated duration for video: ${videoToUpdate.title} -> ${updatedVideos[videoIndex].duration}`);
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching video details batch:', error);
+    }
+    
+    // Add a small delay between batches to avoid rate limiting
+    if (i + batchSize < videosToUpdate.length) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+  
+  console.log(`Updated durations for ${videosToUpdate.length} videos`);
+  return updatedVideos;
 };
 
 /**
@@ -1123,12 +1211,33 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
     
     // Then check if we have cached resources
     try {
-      const cachedResult = await findResourcesForTechnology(topic, 1);
+      const cachedResult = await findResourcesForTechnology(topic, 1, false, roadmapTopics);
       if (cachedResult.success && cachedResult.data.length > 0) {
         console.log(`Found cached resource for "${topic}"`);
         
         // Format the cached resource to match the expected format
         const resource = cachedResult.data[0];
+        
+        // Double-check shared resources to ensure compatibility with roadmap topics
+        if (resource.isShared && resource.technologies && resource.technologies.length > 0 && 
+            roadmapTopics && roadmapTopics.length > 0) {
+          
+          // Check if all technologies in the shared resource are in the roadmap
+          const allTechnologiesInRoadmap = await checkAllResourceTechnologiesInRoadmap(
+            resource.technologies, 
+            roadmapTopics
+          );
+          
+          if (!allTechnologiesInRoadmap) {
+            console.warn(`Rejecting shared cached resource "${resource.title}" because not all its technologies are in the roadmap`);
+            
+            // If rejected, continue with normal search
+            // This effectively skips the cached resource and continues to search YouTube
+            return null;
+          } else {
+            console.log(`Verified shared resource "${resource.title}" has all technologies in roadmap`);
+          }
+        }
         
         // Process videos to ensure they have proper thumbnails and other required fields
         const processedVideos = resource.videos?.map(video => {
@@ -1187,7 +1296,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           // Add thumbnail if it's a single video
           ...(resource.type === 'video' && processedVideos.length > 0 ? {
             thumbnail: processedVideos[0].thumbnail,
-            duration: processedVideos[0].duration,
+            duration: parseInt(processedVideos[0].duration) || 0, // Ensure duration is a number
             duration_string: processedVideos[0].duration_string,
             views_formatted: processedVideos[0].views_formatted || "N/A",
             likes_formatted: processedVideos[0].likes_formatted || "N/A"
@@ -1505,8 +1614,13 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         
         // Cache the resource
         try {
-          await cacheResource(highestRatedVideo, topic);
-          console.log(`Cached excellent video for "${topic}"`);
+          // Use the first extracted technology if available, otherwise fall back to the original topic
+          const primaryTechnology = (highestRatedVideo.technologies && highestRatedVideo.technologies.length > 0) 
+            ? highestRatedVideo.technologies[0] 
+            : topic;
+          
+          await cacheResource(highestRatedVideo, primaryTechnology);
+          console.log(`Cached excellent video for "${primaryTechnology}" (original search: "${topic}")`);
         } catch (cacheError) {
           console.error('Error caching video:', cacheError);
         }
@@ -1531,8 +1645,13 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           
           // Cache the resource
           try {
-            await cacheResource(highestRatedVideo, topic);
-            console.log(`Cached preferred video for "${topic}"`);
+            // Use the first extracted technology if available, otherwise fall back to the original topic
+            const primaryTechnology = (highestRatedVideo.technologies && highestRatedVideo.technologies.length > 0) 
+              ? highestRatedVideo.technologies[0] 
+              : topic;
+            
+            await cacheResource(highestRatedVideo, primaryTechnology);
+            console.log(`Cached preferred video for "${primaryTechnology}" (original search: "${topic}")`);
           } catch (cacheError) {
             console.error('Error caching video:', cacheError);
           }
@@ -1548,8 +1667,13 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           
           // Cache the resource
           try {
-            await cacheResource(bestPlaylist, topic);
-            console.log(`Cached preferred playlist for "${topic}"`);
+            // Use the first extracted technology if available, otherwise fall back to the original topic
+            const primaryTechnology = (bestPlaylist.technologies && bestPlaylist.technologies.length > 0) 
+              ? bestPlaylist.technologies[0] 
+              : topic;
+            
+            await cacheResource(bestPlaylist, primaryTechnology);
+            console.log(`Cached preferred playlist for "${primaryTechnology}" (original search: "${topic}")`);
           } catch (cacheError) {
             console.error('Error caching playlist:', cacheError);
           }
@@ -1562,8 +1686,13 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       
       // Cache the resource
       try {
-        await cacheResource(highestRatedVideo, topic);
-        console.log(`Cached video for "${topic}"`);
+        // Use the first extracted technology if available, otherwise fall back to the original topic
+        const primaryTechnology = (highestRatedVideo.technologies && highestRatedVideo.technologies.length > 0) 
+          ? highestRatedVideo.technologies[0] 
+          : topic;
+        
+        await cacheResource(highestRatedVideo, primaryTechnology);
+        console.log(`Cached video for "${primaryTechnology}" (original search: "${topic}")`);
       } catch (cacheError) {
         console.error('Error caching video:', cacheError);
       }
@@ -1578,8 +1707,13 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       
       // Cache the resource
       try {
-        await cacheResource(bestPlaylist, topic);
-        console.log(`Cached playlist for "${topic}"`);
+        // Use the first extracted technology if available, otherwise fall back to the original topic
+        const primaryTechnology = (bestPlaylist.technologies && bestPlaylist.technologies.length > 0) 
+          ? bestPlaylist.technologies[0] 
+          : topic;
+        
+        await cacheResource(bestPlaylist, primaryTechnology);
+        console.log(`Cached playlist for "${primaryTechnology}" (original search: "${topic}")`);
       } catch (cacheError) {
         console.error('Error caching playlist:', cacheError);
       }
@@ -1924,3 +2058,71 @@ const checkPlaylistTitleRelevance = async (playlistTitle, techName, useEmbedding
   console.log(`Basic relevance check for playlist: "${playlistTitle}" to "${techName}" - ${isRelevant ? 'PASSED' : 'FAILED'}`);
   return isRelevant;
 }; 
+
+/**
+ * Check if all technologies in a shared resource are present in the roadmap topics
+ * @param {Array<string>} resourceTechnologies - The technologies from the resource
+ * @param {Array<string>} roadmapTopics - The topics from the roadmap
+ * @returns {Promise<boolean>} - True if all resource technologies are in the roadmap
+ */
+const checkAllResourceTechnologiesInRoadmap = async (resourceTechnologies, roadmapTopics) => {
+  if (!resourceTechnologies || !Array.isArray(resourceTechnologies) || resourceTechnologies.length === 0) {
+    return false;
+  }
+  
+  if (!roadmapTopics || !Array.isArray(roadmapTopics) || roadmapTopics.length === 0) {
+    return false;
+  }
+  
+  // Normalize roadmap topics for easier comparison
+  const normalizedRoadmapTopics = roadmapTopics.map(topic => 
+    typeof topic === 'string' ? topic.toLowerCase() : ''
+  );
+  
+  console.log('Checking if resource technologies are in roadmap:', {
+    resourceTechs: resourceTechnologies,
+    roadmapTopics: normalizedRoadmapTopics
+  });
+  
+  // Check if each technology in the resource is in the roadmap
+  for (const resourceTech of resourceTechnologies) {
+    let techFound = false;
+    
+    // First check direct match
+    if (normalizedRoadmapTopics.includes(resourceTech.toLowerCase())) {
+      techFound = true;
+      continue;
+    }
+    
+    // If no direct match, check equivalence with each roadmap topic
+    for (const roadmapTopic of normalizedRoadmapTopics) {
+      try {
+        const isEquivalent = await areTechnologiesEquivalent(resourceTech, roadmapTopic);
+        if (isEquivalent) {
+          techFound = true;
+          break;
+        }
+      } catch (error) {
+        console.error(`Error checking technology equivalence: ${error.message}`);
+        // Fallback to simplified comparison
+        if (fallbackAreTechnologiesEquivalent(resourceTech, roadmapTopic)) {
+          techFound = true;
+          break;
+        }
+      }
+    }
+    
+    // If any technology is not found in the roadmap, return false
+    if (!techFound) {
+      console.warn(`Resource technology "${resourceTech}" not found in roadmap topics`);
+      return false;
+    }
+  }
+  
+  // All technologies were found in the roadmap
+  return true;
+};
+
+/**
+ * Get topic resources (compatibility function for the original API)
+ */

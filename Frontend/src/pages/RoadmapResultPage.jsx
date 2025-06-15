@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import HeroAnimation from '../components/HeroAnimation';
 import { generateLearningRoadmap } from '../services/groqService';
 import { findBestVideoForTopic } from '../services/youtubeService';
 import { saveGeneratedRoadmap, checkAuth, getRoadmap, downloadRoadmap } from '../services/roadmapService';
+import { getCustomRoadmap } from '../services/customRoadmapService';
 import { useAuth } from '../context/AuthContext';
+import { useCustomRoadmap } from '../context/CustomRoadmapContext';
 import { motion } from 'framer-motion';
 import RoadmapLoadingState from '../components/roadmap/loading/RoadmapLoadingState';
 import RoadmapErrorState from '../components/roadmap/error/RoadmapErrorState';
@@ -15,11 +17,15 @@ import PracticeProjects from '../components/roadmap/sections/PracticeProjects';
 import RoadmapFooter from '../components/roadmap/footer/RoadmapFooter';
 import { toast } from 'react-hot-toast';
 import Navbar from '../components/Navbar';
-import { FaFileExport } from 'react-icons/fa';
+import { FaFileExport, FaEdit } from 'react-icons/fa';
 import ResourceLoadingModal from '../components/roadmap/modals/ResourceLoadingModal';
 import { updateSharedResources } from '../services/resourceCache';
+import UserResourceManager from '../components/UserResourceManager';
+import useChatbotContext from '../hooks/useChatbotContext';
+import ChatbotWrapper from '../components/chatbot/ChatbotWrapper';
+import axios from 'axios';
 
-const RoadmapResultPage = ({ fromSaved = false }) => {
+const RoadmapResultPage = ({ fromSaved = false, isCustom = false }) => {
   const [roadmap, setRoadmap] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,10 +38,51 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
   const [savedToDB, setSavedToDB] = useState(false);
   const [savingToDB, setSavingToDB] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [showUserResourceManager, setShowUserResourceManager] = useState(false);
   const MAX_RETRIES = 5;
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+  const { savedRoadmaps } = useCustomRoadmap();
   const { id } = useParams(); // Get roadmap ID from URL for fromSaved mode
+  const location = useLocation();
+
+  // Check if the roadmap has resources
+  const hasResources = useMemo(() => {
+    if (!roadmap || !roadmap.sections) return false;
+    
+    return roadmap.sections.some(section => {
+      return section.topics?.some(topic => 
+        topic.video?.videos && topic.video.videos.length > 0
+      );
+    });
+  }, [roadmap]);
+
+  // Update chatbot context with current roadmap data
+  const chatbotContextData = useMemo(() => ({
+    roadmap: roadmap ? {
+      title: roadmap.title,
+      description: roadmap.description,
+      difficulty: roadmap.difficulty,
+      estimatedHours: roadmap.estimatedHours,
+      sections: roadmap.sections?.map(section => ({
+        title: section.title,
+        topics: section.topics?.map(topic => ({
+          name: topic.name,
+          description: topic.description
+        }))
+      }))
+    } : null,
+    topic: currentTopic || null,
+    progress: {
+      percent: progressPercent,
+      hasResources: hasResources
+    }
+  }), [roadmap, currentTopic, progressPercent, hasResources]);
+
+  useChatbotContext(
+    chatbotContextData,
+    [chatbotContextData]
+  );
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -103,9 +150,15 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       console.log('Auth check passed, user authenticated:', authStatus.isAuthenticated);
       console.log('User ID:', authStatus.user?._id);
       
+      // Make sure the isCustom flag is preserved
+      const roadmapToSave = {
+        ...roadmapData,
+        isCustom: roadmapData.isCustom || isCustom || false
+      };
+      
       // Try to save
       try {
-        const savedRoadmap = await saveGeneratedRoadmap(roadmapData);
+        const savedRoadmap = await saveGeneratedRoadmap(roadmapToSave);
         console.log('Roadmap saved to database:', savedRoadmap);
         
         // Handle the case where our service detected and prevented a duplicate save
@@ -118,7 +171,7 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
         
         setSavedToDB(true);
         setSavingToDB(false);
-        return true;
+        return savedRoadmap;
       } catch (innerError) {
         console.error('Inner error saving roadmap:', innerError);
         
@@ -180,17 +233,6 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
     }
   };
 
-  // Check if the roadmap has resources
-  const hasResources = useMemo(() => {
-    if (!roadmap || !roadmap.sections) return false;
-    
-    return roadmap.sections.some(section => {
-      return section.topics?.some(topic => 
-        topic.video?.videos && topic.video.videos.length > 0
-      );
-    });
-  }, [roadmap]);
-
   useEffect(() => {
     if (fromSaved) {
       // Loading an existing roadmap from the database
@@ -209,12 +251,35 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
             return;
           }
           
-          const response = await getRoadmap(id);
+          let response;
+          try {
+            if (isCustom) {
+              // If it's a custom roadmap, use the custom roadmap service
+              console.log('Fetching custom roadmap with ID:', id);
+              response = await getCustomRoadmap(id);
+            } else {
+              // Otherwise use the regular roadmap service
+              console.log('Fetching standard roadmap with ID:', id);
+              response = await getRoadmap(id);
+            }
+          } catch (fetchError) {
+            console.error(`Error with initial fetch method, trying alternative:`, fetchError);
+            // If the first attempt fails, try the other method as fallback
+            if (isCustom) {
+              console.log('Fallback: Trying to fetch as standard roadmap instead');
+              response = await getRoadmap(id);
+            } else {
+              console.log('Fallback: Trying to fetch as custom roadmap instead');
+              response = await getCustomRoadmap(id);
+            }
+          }
+          
           const roadmapData = response.data;
+          console.log('Raw roadmap data received:', roadmapData);
           
           // Format the data to match the expected structure for RoadmapResultPage
           const formattedRoadmap = {
-            title: roadmapData.title,
+            title: isCustom ? roadmapData.name || roadmapData.title : roadmapData.title,
             description: roadmapData.description,
             sections: roadmapData.topics.map(topic => ({
               title: topic.title,
@@ -227,7 +292,8 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
               }]
             })),
             advancedTopics: roadmapData.advancedTopics || [],
-            projects: roadmapData.projects || []
+            projects: roadmapData.projects || [],
+            isCustom: roadmapData.isCustom || isCustom // Make sure to preserve the isCustom flag
           };
           
           setRoadmap(formattedRoadmap);
@@ -266,7 +332,8 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
               description: item.description,
               difficulty: item.difficulty,
               topics: [{ title: item.title, description: item.description }]
-            }))
+            })),
+            isCustom: result.isCustom || false
           };
           
           // Set the roadmap state
@@ -386,7 +453,35 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
     }
   };
 
-  const addYouTubeVideos = async () => {
+  // Function to handle start YouTube journey button click
+  const handleStartYouTubeJourney = () => {
+    // Show user resource manager first
+    setShowUserResourceManager(true);
+  };
+
+  // Function to handle completion of user resource management
+  const handleUserResourcesComplete = (updatedRoadmap) => {
+    // Hide user resource manager
+    setShowUserResourceManager(false);
+    
+    // Update roadmap with user-provided resources
+    setRoadmap(updatedRoadmap);
+    
+    // Start adding YouTube videos for topics without user resources
+    addYouTubeVideos(updatedRoadmap);
+  };
+
+  // Function to handle cancellation of user resource management
+  const handleUserResourcesCancel = () => {
+    // Hide user resource manager
+    setShowUserResourceManager(false);
+    
+    // Start adding YouTube videos for all topics
+    addYouTubeVideos();
+  };
+
+  // Modified addYouTubeVideos function to handle user-provided resources
+  const addYouTubeVideos = async (roadmapWithUserResources = null) => {
     try {
       setLoadingVideos(true);
       setError(null);
@@ -394,7 +489,8 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       setFoundResources([]);
       setProgressPercent(0);
 
-      const updatedRoadmap = { ...roadmap };
+      // Use the roadmap with user resources if provided, otherwise use the current roadmap
+      const updatedRoadmap = { ...(roadmapWithUserResources || roadmap) };
       
       // Calculate total topics for progress tracking
       let totalTopics = 0;
@@ -402,11 +498,30 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       
       updatedRoadmap.sections.forEach(section => {
         section.topics.forEach(topic => {
-          if (!topic.video) {
+          // Only count topics that need resources (don't have user-provided resources)
+          if (!topic.hasUserResource) {
             totalTopics++;
           }
         });
       });
+      
+      // Extract all topic titles from the roadmap for checking shared resources
+      const allRoadmapTopics = [];
+      updatedRoadmap.sections.forEach(section => {
+        section.topics.forEach(topic => {
+          // Normalize topic title and add to array
+          const normalizedTitle = topic.title
+            .replace(/^Complete\s+/i, '')
+            .replace(/[()]/g, '')
+            .split(' ')
+            .filter((word, index, arr) => arr.indexOf(word) === index)
+            .join(' ');
+          
+          allRoadmapTopics.push(normalizedTitle);
+        });
+      });
+      
+      console.log('All roadmap topics for shared resource checking:', allRoadmapTopics);
       
       for (let i = 0; i < updatedRoadmap.sections.length; i++) {
         const section = updatedRoadmap.sections[i];
@@ -414,77 +529,92 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
         for (let j = 0; j < section.topics.length; j++) {
           const topic = section.topics[j];
           
-          if (!topic.video) {
-            try {
-              // Fix duplicate technology names in search query
-              const normalizedTopicTitle = topic.title.replace(/^Complete\s+/i, '').replace(/[()]/g, '');
+          // Skip topics that already have user-provided resources
+          if (topic.hasUserResource) {
+            console.log(`Skipping "${topic.title}" - user provided resource`);
+            continue;
+          }
+          
+          try {
+            // Fix duplicate technology names in search query
+            const normalizedTopicTitle = topic.title.replace(/^Complete\s+/i, '').replace(/[()]/g, '');
+            
+            // Remove duplicate words (e.g., "HTML HTML" -> "HTML")
+            const normalizedSectionTitle = section.title.split(' ')
+              .filter((word, index, arr) => arr.indexOf(word) === index)
+              .join(' ');
+            
+            const normalizedTopicWords = normalizedTopicTitle.split(' ')
+              .filter((word, index, arr) => arr.indexOf(word) === index)
+              .join(' ');
               
-              // Remove duplicate words (e.g., "HTML HTML" -> "HTML")
-              const normalizedSectionTitle = section.title.split(' ')
-                .filter((word, index, arr) => arr.indexOf(word) === index)
-                .join(' ');
-              
-              const normalizedTopicWords = normalizedTopicTitle.split(' ')
-                .filter((word, index, arr) => arr.indexOf(word) === index)
-                .join(' ');
-                
-              const searchQuery = `${normalizedSectionTitle} ${normalizedTopicWords}`;
-              console.log(`Finding video for: ${searchQuery}`);
-              
-              // Update current topic being processed
-              setCurrentTopic(`${section.title}: ${topic.title}`);
-              
-              const isAdvancedTopic = section.difficulty === 'advanced' || 
-                                     section.title.toLowerCase().includes('advanced');
-              
-              const videoOrPlaylist = await findBestVideoForTopic(searchQuery, isAdvancedTopic);
-              
-              if (videoOrPlaylist) {
-                if (videoOrPlaylist.isPlaylist) {
-                  updatedRoadmap.sections[i].topics[j].video = {
-                    title: videoOrPlaylist.title,
-                    url: videoOrPlaylist.url,
-                    channel: videoOrPlaylist.channel?.name || videoOrPlaylist.channel || 'Unknown',
-                    videoCount: videoOrPlaylist.videoCount || videoOrPlaylist.video_count || videoOrPlaylist.videos?.length || 0,
-                    avgViews: videoOrPlaylist.avgViews,
-                    rating: videoOrPlaylist.rating || videoOrPlaylist.score || 'N/A',
-                    quality: videoOrPlaylist.quality || videoOrPlaylist.verdict,
-                    isPlaylist: true,
-                    videos: videoOrPlaylist.videos?.map(video => ({
-                      id: video.id,
-                      title: video.title,
-                      url: video.url,
-                      channel: video.channel?.name || video.channel || 'Unknown',
-                      duration: video.duration_string || video.duration || 'Unknown',
-                      duration_string: video.duration_string || video.duration || 'Unknown',
-                      publish_date: video.publish_date || 'Unknown',
-                      views: video.views_formatted || 'N/A',
-                      likes: video.likes_formatted || 'N/A',
-                      thumbnail: video.thumbnail || 
-                                (video.id && /^[a-zA-Z0-9_-]{11}$/.test(video.id) ? 
-                                  `https://img.youtube.com/vi/${video.id}/mqdefault.jpg` : 
-                                  'https://via.placeholder.com/320x180?text=No+Thumbnail')
-                    })) || [],
-                    directViewCount: videoOrPlaylist.directViewCount,
-                    directViewCountFormatted: videoOrPlaylist.directViewCountFormatted
-                  };
-                  
-                  // Add to found resources list for display
-                  setFoundResources(prev => [...prev, {
-                    title: videoOrPlaylist.title,
-                    type: 'playlist',
-                    videoCount: videoOrPlaylist.videoCount || videoOrPlaylist.video_count || videoOrPlaylist.videos?.length || 0,
-                    thumbnail: videoOrPlaylist.videos?.[0]?.thumbnail || 
-                              (videoOrPlaylist.videos?.[0]?.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.videos[0].id) ? 
-                                `https://img.youtube.com/vi/${videoOrPlaylist.videos[0].id}/mqdefault.jpg` : 
+            const searchQuery = `${normalizedSectionTitle} ${normalizedTopicWords}`;
+            console.log(`Finding video for: ${searchQuery}`);
+            
+            // Update current topic being processed
+            setCurrentTopic(`${section.title}: ${topic.title}`);
+            
+            const isAdvancedTopic = section.difficulty === 'advanced' || 
+                                   section.title.toLowerCase().includes('advanced');
+            
+            const videoOrPlaylist = await findBestVideoForTopic(searchQuery, isAdvancedTopic, allRoadmapTopics);
+            
+            if (videoOrPlaylist) {
+              if (videoOrPlaylist.isPlaylist) {
+                updatedRoadmap.sections[i].topics[j].video = {
+                  title: videoOrPlaylist.title,
+                  url: videoOrPlaylist.url,
+                  channel: videoOrPlaylist.channel?.name || videoOrPlaylist.channel || 'Unknown',
+                  videoCount: videoOrPlaylist.videoCount || videoOrPlaylist.video_count || videoOrPlaylist.videos?.length || 0,
+                  avgViews: videoOrPlaylist.avgViews,
+                  rating: videoOrPlaylist.rating || videoOrPlaylist.score || 'N/A',
+                  quality: videoOrPlaylist.quality || videoOrPlaylist.verdict,
+                  isPlaylist: true,
+                  videos: videoOrPlaylist.videos?.map(video => ({
+                    id: video.id,
+                    title: video.title,
+                    url: video.url,
+                    channel: video.channel?.name || video.channel || 'Unknown',
+                    duration: video.duration_string || video.duration || 'Unknown',
+                    duration_string: video.duration_string || video.duration || 'Unknown',
+                    publish_date: video.publish_date || 'Unknown',
+                    views: video.views_formatted || 'N/A',
+                    likes: video.likes_formatted || 'N/A',
+                    thumbnail: video.thumbnail || 
+                              (video.id && /^[a-zA-Z0-9_-]{11}$/.test(video.id) ? 
+                                `https://img.youtube.com/vi/${video.id}/mqdefault.jpg` : 
                                 'https://via.placeholder.com/320x180?text=No+Thumbnail')
-                  }]);
-                } else {
-                  // For individual videos
-                  console.log(`Added video for "${topic.title}": ${videoOrPlaylist.title}`);
-                  
-                  // Format the resource for storage
-                  topic.video = {
+                  })) || [],
+                  directViewCount: videoOrPlaylist.directViewCount,
+                  directViewCountFormatted: videoOrPlaylist.directViewCountFormatted
+                };
+                
+                // Add to found resources list for display
+                setFoundResources(prev => [...prev, {
+                  title: videoOrPlaylist.title,
+                  type: 'playlist',
+                  videoCount: videoOrPlaylist.videoCount || videoOrPlaylist.video_count || videoOrPlaylist.videos?.length || 0,
+                  thumbnail: videoOrPlaylist.videos?.[0]?.thumbnail || 
+                            (videoOrPlaylist.videos?.[0]?.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.videos[0].id) ? 
+                              `https://img.youtube.com/vi/${videoOrPlaylist.videos[0].id}/mqdefault.jpg` : 
+                              'https://via.placeholder.com/320x180?text=No+Thumbnail')
+                }]);
+              } else {
+                // For individual videos
+                console.log(`Added video for "${topic.title}": ${videoOrPlaylist.title}`);
+                
+                // Format the resource for storage
+                topic.video = {
+                  id: videoOrPlaylist.id,
+                  title: videoOrPlaylist.title,
+                  url: videoOrPlaylist.url,
+                  channel: videoOrPlaylist.channel?.name || videoOrPlaylist.channel || 'Unknown',
+                  duration: videoOrPlaylist.duration_string || videoOrPlaylist.duration || 'Unknown',
+                  duration_string: videoOrPlaylist.duration_string || videoOrPlaylist.duration || 'Unknown',
+                  publish_date: videoOrPlaylist.publish_date || 'Unknown',
+                  views: videoOrPlaylist.views_formatted || 'N/A',
+                  likes: videoOrPlaylist.likes_formatted || 'N/A',
+                  videos: [{
                     id: videoOrPlaylist.id,
                     title: videoOrPlaylist.title,
                     url: videoOrPlaylist.url,
@@ -494,52 +624,44 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
                     publish_date: videoOrPlaylist.publish_date || 'Unknown',
                     views: videoOrPlaylist.views_formatted || 'N/A',
                     likes: videoOrPlaylist.likes_formatted || 'N/A',
-                    videos: [{
-                      id: videoOrPlaylist.id,
-                      title: videoOrPlaylist.title,
-                      url: videoOrPlaylist.url,
-                      channel: videoOrPlaylist.channel?.name || videoOrPlaylist.channel || 'Unknown',
-                      duration: videoOrPlaylist.duration_string || videoOrPlaylist.duration || 'Unknown',
-                      duration_string: videoOrPlaylist.duration_string || videoOrPlaylist.duration || 'Unknown',
-                      publish_date: videoOrPlaylist.publish_date || 'Unknown',
-                      views: videoOrPlaylist.views_formatted || 'N/A',
-                      likes: videoOrPlaylist.likes_formatted || 'N/A',
-                      thumbnail: videoOrPlaylist.thumbnail || 
-                                (videoOrPlaylist.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.id) ? 
-                                  `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg` : 
-                                  'https://via.placeholder.com/320x180?text=No+Thumbnail')
-                    }]
-                  };
-                  
-                  // Add to found resources list for display
-                  setFoundResources(prev => [...prev, {
-                    title: videoOrPlaylist.title,
-                    type: 'video',
                     thumbnail: videoOrPlaylist.thumbnail || 
                               (videoOrPlaylist.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.id) ? 
                                 `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg` : 
                                 'https://via.placeholder.com/320x180?text=No+Thumbnail')
-                  }]);
-                }
+                  }]
+                };
                 
-                console.log(`Added ${videoOrPlaylist.isPlaylist ? 'playlist' : 'video'} for "${searchQuery}": ${videoOrPlaylist.title}`);
+                // Add to found resources list for display
+                setFoundResources(prev => [...prev, {
+                  title: videoOrPlaylist.title,
+                  type: 'video',
+                  thumbnail: videoOrPlaylist.thumbnail || 
+                            (videoOrPlaylist.id && /^[a-zA-Z0-9_-]{11}$/.test(videoOrPlaylist.id) ? 
+                              `https://img.youtube.com/vi/${videoOrPlaylist.id}/mqdefault.jpg` : 
+                              'https://via.placeholder.com/320x180?text=No+Thumbnail')
+                }]);
               }
               
-              // Update progress
-              processedTopics++;
-              setProgressPercent(Math.round((processedTopics / totalTopics) * 100));
-              
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (error) {
-              console.error(`Error finding video for ${searchQuery}:`, error);
-              
-              // Update progress even on error
-              processedTopics++;
-              setProgressPercent(Math.round((processedTopics / totalTopics) * 100));
+              console.log(`Added ${videoOrPlaylist.isPlaylist ? 'playlist' : 'video'} for "${searchQuery}": ${videoOrPlaylist.title}`);
             }
+            
+            // Update progress
+            processedTopics++;
+            setProgressPercent(Math.round((processedTopics / totalTopics) * 100));
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Error finding video for ${topic.title}:`, error);
+            
+            // Update progress even on error
+            processedTopics++;
+            setProgressPercent(Math.round((processedTopics / totalTopics) * 100));
           }
         }
       }
+      
+      // Make sure to preserve the isCustom flag
+      updatedRoadmap.isCustom = roadmap.isCustom;
       
       setRoadmap(updatedRoadmap);
       localStorage.setItem('roadmapData', JSON.stringify(updatedRoadmap));
@@ -559,11 +681,142 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
         // Non-critical error, don't block the user flow
       }
       
-      // Close modal and navigate after a short delay to show 100% completion
-      setTimeout(() => {
-        setShowResourceLoadingModal(false);
-        navigate('/roadmap-progress');
-      }, 1500);
+      try {
+        // Direct API call to save the roadmap
+        console.log('Making direct API call to save roadmap');
+        
+        // Always use the regular roadmap endpoint for now
+        const formattedRoadmap = {
+          title: updatedRoadmap.title,
+          description: updatedRoadmap.description || '',
+          category: updatedRoadmap.category || 'Web Development',
+          difficulty: updatedRoadmap.difficulty || 'Intermediate',
+          isPublic: false,
+          isCustom: false, // Force to false to use regular endpoint
+          topics: []
+        };
+        
+        // Convert sections to topics format
+        if (updatedRoadmap.sections && updatedRoadmap.sections.length > 0) {
+          formattedRoadmap.topics = updatedRoadmap.sections.map((section, index) => {
+            // Process resources if they exist
+            let resources = [];
+            if (section.topics && section.topics[0]?.video?.videos) {
+              resources = section.topics[0].video.videos.map(video => {
+                return {
+                  title: video.title,
+                  url: video.url,
+                  type: 'video',
+                  description: video.description || '',
+                  thumbnailUrl: video.thumbnail || '',
+                  source: video.channel || 'YouTube',
+                  duration: processDuration(video.duration),
+                  isRequired: true
+                };
+              });
+            }
+            
+            return {
+              title: section.title,
+              description: section.description || '',
+              order: index + 1,
+              difficulty: section.difficulty?.toLowerCase() || 'intermediate',
+              resources: resources,
+              hasGeneratedResources: resources.length > 0,
+              totalResources: resources.length,
+              completedResources: 0,
+              completedResourceIds: []
+            };
+          });
+        }
+        
+        // Helper function to process duration values
+        function processDuration(duration) {
+          // If it's already a number, return it
+          if (typeof duration === 'number' && !isNaN(duration)) {
+            return duration;
+          }
+          
+          // If it's a string with a colon (time format like "5:30")
+          if (typeof duration === 'string' && duration.includes(':')) {
+            const parts = duration.split(':').map(part => parseInt(part) || 0);
+            
+            // Handle HH:MM:SS format
+            if (parts.length === 3) {
+              return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+            }
+            
+            // Handle MM:SS format
+            else if (parts.length === 2) {
+              return (parts[0] * 60) + parts[1];
+            }
+          }
+          
+          // If it's a numeric string
+          if (typeof duration === 'string' && !isNaN(duration)) {
+            return parseInt(duration);
+          }
+          
+          // Default to a reasonable duration if we can't parse it
+          // This is better than storing 0 or 1 which are clearly wrong
+          return 300; // 5 minutes as a reasonable default
+        }
+        
+        // Get token from localStorage
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No auth token found');
+        }
+        
+        // Log the formatted roadmap
+        console.log('Formatted roadmap for API:', JSON.stringify(formattedRoadmap, null, 2));
+        
+        // Create axios instance for direct API call
+        const API_URL = 'http://localhost:5000/api';
+        // Always use the regular roadmaps endpoint
+        const endpoint = '/roadmaps';
+        
+        console.log(`Making API call to ${API_URL}${endpoint}`);
+        
+        const response = await axios.post(`${API_URL}${endpoint}`, formattedRoadmap, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        console.log('Direct API save response:', response);
+        
+        // Check for ID in different possible locations in the response
+        const roadmapId = response.data?._id || 
+                         response.data?.data?._id || 
+                         response.data?.roadmap?._id;
+        
+        if (roadmapId) {
+          console.log('Successfully saved roadmap with ID:', roadmapId);
+          toast.success('Roadmap saved successfully!');
+          
+          // Close modal and navigate after a short delay to show 100% completion
+          setTimeout(() => {
+            setShowResourceLoadingModal(false);
+            navigate(`/roadmaps/${roadmapId}/resources`);
+          }, 1500);
+        } else {
+          console.error('No ID found in response:', response.data);
+          throw new Error('No ID returned from API');
+        }
+      } catch (saveError) {
+        console.error('Error saving roadmap:', saveError);
+        
+        // Save to JSON file as fallback
+        saveRoadmapToJson(updatedRoadmap);
+        
+        // Close modal after a short delay
+        setTimeout(() => {
+          setShowResourceLoadingModal(false);
+          toast.error('Could not save to database. Roadmap saved locally.');
+        }, 1500);
+      }
     } catch (error) {
       console.error('Error finding YouTube resources:', error);
       setError('Failed to find YouTube resources. Please try again.');
@@ -602,6 +855,7 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       <>
         <Navbar />
         <RoadmapLoadingState />
+        <ChatbotWrapper />
       </>
     );
   }
@@ -611,7 +865,26 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       <>
         <Navbar />
         <RoadmapErrorState error={error} onRetry={handleRetry} />
+        <ChatbotWrapper />
       </>
+    );
+  }
+
+  // Show user resource manager if active
+  if (showUserResourceManager) {
+    return (
+      <div className="min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(to bottom, #FFF7ED, #FFFFFF)' }}>
+        <Navbar />
+        <HeroAnimation />
+        <div className="max-w-7xl mx-auto px-4 pt-24 pb-16">
+          <UserResourceManager 
+            roadmap={roadmap} 
+            onComplete={handleUserResourcesComplete} 
+            onCancel={handleUserResourcesCancel} 
+          />
+        </div>
+        <ChatbotWrapper />
+      </div>
     );
   }
 
@@ -647,14 +920,19 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
       />
       
       <div className="pt-20">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col">
           <RoadmapHeader 
             title={roadmap.title}
             description={roadmap.description}
             fromSaved={fromSaved}
+            isCustom={roadmap.isCustom}
             editMode={editMode}
             setEditMode={setEditMode}
+            onExport={handleExportRoadmap}
+            hasResources={hasResources}
           />
+          
+          {/* Edit button for custom roadmaps removed */}
         </div>
   
         {/* Automatic save notification */}
@@ -690,7 +968,7 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
           className="max-w-7xl mx-auto px-4 pt-0 pb-16 relative"
         >
           {/* Main Learning Path */}
-          <LearningPath sections={roadmap.sections} editMode={editMode} />
+          <LearningPath sections={roadmap.sections} editMode={editMode} isCustom={roadmap.isCustom} />
 
           {/* Advanced Challenges Section */}
           {roadmap.advancedTopics && roadmap.advancedTopics.length > 0 && (
@@ -711,13 +989,15 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
           {/* Footer Section */}
           <RoadmapFooter 
             fromSaved={fromSaved}
+            isCustom={roadmap.isCustom}
             onSave={() => saveRoadmapToDatabase(roadmap)}
-            onAddVideos={addYouTubeVideos}
+            onAddVideos={handleStartYouTubeJourney}
             loadingVideos={loadingVideos}
             savedToDB={savedToDB}
             savingToDB={savingToDB}
             onExport={handleExportRoadmap}
             roadmap={roadmap}
+            hasResources={hasResources}
           />
 
           {/* Save Button - Only show for roadmaps without resources or if not already saved */}
@@ -758,6 +1038,7 @@ const RoadmapResultPage = ({ fromSaved = false }) => {
           )}
         </motion.div>
       </div>
+      <ChatbotWrapper />
     </div>
   );
 };

@@ -132,11 +132,25 @@ export const getChannelName = (video) => {
   }
   
   // Case 2: channel is an object with name property
-  if (video.channel && typeof video.channel === 'object' && video.channel.name) {
-    return video.channel.name;
+  if (video.channel && typeof video.channel === 'object') {
+    if (video.channel.name !== undefined) {
+      return video.channel.name || 'Unknown Channel';
+    }
+    // Handle case where channel might be an empty object
+    return 'Unknown Channel';
   }
   
-  // Case 3: try to get channel from the first video in playlist
+  // Case 3: try to get source if channel is not available
+  if (video.source) {
+    if (typeof video.source === 'string') {
+      return video.source;
+    }
+    if (typeof video.source === 'object' && video.source.name !== undefined) {
+      return video.source.name || 'Unknown Channel';
+    }
+  }
+  
+  // Case 4: try to get channel from the first video in playlist
   if (video.videos && video.videos.length > 0) {
     const firstVideo = video.videos[0];
     
@@ -146,6 +160,16 @@ export const getChannelName = (video) => {
     
     if (firstVideo.channel && typeof firstVideo.channel === 'object' && firstVideo.channel.name) {
       return firstVideo.channel.name;
+    }
+    
+    // Try source from first video
+    if (firstVideo.source) {
+      if (typeof firstVideo.source === 'string') {
+        return firstVideo.source;
+      }
+      if (typeof firstVideo.source === 'object' && firstVideo.source.name !== undefined) {
+        return firstVideo.source.name || 'Unknown Channel';
+      }
     }
   }
   

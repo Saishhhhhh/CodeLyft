@@ -15,4 +15,10 @@ router.post('/roadmaps/:id/topics', isAuthenticated, roadmapController.addTopic)
 router.put('/roadmaps/:id/topics/:topicId/progress', isAuthenticated, roadmapController.updateTopicProgress);
 router.post('/roadmaps/:id/topics/:topicId/resources/generate', isAuthenticated, roadmapController.generateTopicResources);
 
+// Migration route
+router.post('/roadmaps/migrate-progress', isAuthenticated, roadmapController.migrateRoadmapProgress);
+
+// Update roadmap progress
+router.put('/roadmaps/:roadmapId/progress', isAuthenticated, roadmapController.updateRoadmapProgress);
+
 module.exports = router;

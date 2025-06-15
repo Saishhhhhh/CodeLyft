@@ -577,7 +577,7 @@ export const generateLearningRoadmap = async (userData) => {
       const roadmapShContext = getRoadmapShContext(userData.topic);
       
       const requestBody = {
-        model: 'llama3-70b-8192',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           {
             role: 'system',
@@ -586,12 +586,14 @@ export const generateLearningRoadmap = async (userData) => {
 ${roadmapShContext}
 
 Follow these guidelines:
-1. Present the roadmap as a SEQUENTIAL PATH of technologies to learn (e.g., HTML → CSS → JavaScript → React → Node.js)
-2. Each technology should be its own separate section with NO SUBTOPICS
-3. Each section should contain exactly ONE topic representing the complete technology
-4. For each technology, provide a brief description of what it is and why it's important
-5. Organize everything in a logical learning progression from beginner to advanced
-6. Use the roadmap.sh data as a reference for valid technology sequences
+1. Present the roadmap as a SEQUENTIAL PATH of CONCRETE TOOLS, LIBRARIES, and PLATFORMS to learn (e.g., HTML → CSS → Bootstrap → JavaScript → React → Node.js → Express.js → MongoDB)
+2. Focus EXCLUSIVELY on specific technologies, libraries, frameworks, and tools - NOT abstract domains or concepts
+3. Always include essential general tools like Git/GitHub that are relevant to the field
+4. Each technology should be its own separate section with NO SUBTOPICS
+5. Each section should contain exactly ONE specific tool/library/framework representing the complete technology
+6. Organize everything in a logical learning progression from foundational to advanced
+7. Include MORE items in the roadmap (12-15 items) if relevant to provide a comprehensive learning path
+8. Use the roadmap.sh data as a reference for valid technology sequences
 
 EXTREMELY IMPORTANT JSON FORMATTING RULES:
 - Follow the provided JSON schema EXACTLY - do not add or modify properties
