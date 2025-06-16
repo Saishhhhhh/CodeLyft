@@ -665,7 +665,8 @@ const RoadmapResultPage = ({ fromSaved = false, isCustom = false }) => {
       
       setRoadmap(updatedRoadmap);
       localStorage.setItem('roadmapData', JSON.stringify(updatedRoadmap));
-      await saveResourcesToJson(updatedRoadmap);
+      // Commenting out automatic JSON download
+      // await saveResourcesToJson(updatedRoadmap);
       
       // Update shared resources after roadmap generation is complete
       try {

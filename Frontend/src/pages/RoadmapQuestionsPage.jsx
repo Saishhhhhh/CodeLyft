@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HeroAnimation from '../components/HeroAnimation';
-import { generateLearningQuestions } from '../services/groqService';
+import { generateLearningQuestions, validateAndGenerateQuestions } from '../services/groqService';
 
 const RoadmapQuestionsPage = () => {
   const [learningTopic, setLearningTopic] = useState('');
@@ -17,6 +17,56 @@ const RoadmapQuestionsPage = () => {
   });
 
   useEffect(() => {
+    // Check if we have a pending learning topic from before login
+    const pendingTopic = localStorage.getItem('pendingLearningTopic');
+    
+    if (pendingTopic) {
+      // Process the pending topic
+      const processPendingTopic = async () => {
+        setLoading(true);
+        try {
+          const result = await validateAndGenerateQuestions(pendingTopic);
+          
+          if (result.validation.isValid) {
+            // Store extracted topic and questions
+            localStorage.setItem('learningTopic', result.validation.extractedTopic);
+            setLearningTopic(result.validation.extractedTopic);
+            setQuestions(result.questions);
+            
+            // Clear the pending topic as it's now processed
+            localStorage.removeItem('pendingLearningTopic');
+          } else {
+            // If validation fails, we'll still use the raw input
+            localStorage.setItem('learningTopic', pendingTopic);
+            setLearningTopic(pendingTopic);
+            
+            // Generate fallback questions
+            const result = await generateLearningQuestions(pendingTopic);
+            setQuestions(result.questions);
+            
+            // Clear the pending topic
+            localStorage.removeItem('pendingLearningTopic');
+          }
+        } catch (error) {
+          console.error('Error processing pending topic:', error);
+          // Set a generic learning topic and fallback questions
+          setLearningTopic(pendingTopic);
+          setQuestions([
+            `What's your current experience level with ${pendingTopic}?`,
+            `What's your main goal for learning ${pendingTopic}?`,
+            `How much content would you like included in your ${pendingTopic} roadmap?`
+          ]);
+          localStorage.removeItem('pendingLearningTopic');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      processPendingTopic();
+      return;
+    }
+    
+    // If no pending topic, continue with normal flow
     // Get the learning topic from localStorage
     const storedTopic = localStorage.getItem('learningTopic');
     if (!storedTopic) {

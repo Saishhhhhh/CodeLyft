@@ -307,18 +307,6 @@ const saveRoadmapLocally = (roadmapData) => {
     localStorage.setItem('savedRoadmaps', JSON.stringify(savedRoadmaps));
     console.log('Roadmap saved locally as fallback');
     
-    // Also offer download as JSON
-    const jsonData = JSON.stringify(roadmapData, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `roadmap_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
     return { success: true, message: 'Roadmap saved locally', data: roadmapData };
   } catch (error) {
     console.error('Error saving roadmap locally:', error);

@@ -58,6 +58,7 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
     completed: 0,
     percentage: 0
   });
+  const [showSavedBadge, setShowSavedBadge] = useState(false);
 
   // Check if the roadmap has resources
   const hasResources = useMemo(() => {
@@ -517,8 +518,18 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
       
       if (newCompletedVideos[videoId]) {
         delete newCompletedVideos[videoId];
+        // Show notification for unmarking a video as completed
+        toast.success('Video marked as not completed', {
+          icon: '❌',
+          duration: 3000
+        });
       } else {
         newCompletedVideos[videoId] = true;
+        // Show notification for marking a video as completed
+        toast.success('Video marked as completed', {
+          icon: '✅',
+          duration: 3000
+        });
       }
       
       setCompletedVideos(newCompletedVideos);
@@ -820,6 +831,11 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
       console.log('Auto-saving roadmap with resources...');
       saveRoadmapToDatabase();
     }
+    
+    // Show saved badge if from a saved roadmap
+    if (fromSaved) {
+      setShowSavedBadge(true);
+    }
   }, [hasResources, isAuthenticated, fromSaved, savedToDB, savingToDB]);
 
   // Add save to database function
@@ -912,6 +928,7 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
       
       toast.success('Roadmap saved to your account');
       setSavedToDB(true);
+      setShowSavedBadge(true);
     } catch (error) {
       console.error('Error saving roadmap to database:', error);
       toast.error('Failed to save roadmap to your account');
@@ -1013,9 +1030,12 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
               }}>
                 {roadmap.title}
               </h1>
-              <p className="text-xl text-gray-600 mb-4 font-mukta">
-                {roadmap.description}
-              </p>
+              {showSavedBadge && (
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 mb-4">
+                  <FaCheck className="mr-1" /> Saved to your profile
+                </div>
+              )}
+              <p className="text-gray-600 max-w-2xl mx-auto font-mukta">{roadmap.description}</p>
             </div>
           </div>
 

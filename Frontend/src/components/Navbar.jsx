@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.svg';
 
@@ -8,7 +8,15 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const profileDropdownRef = useRef(null);
+
+  // Determine if we're on auth pages
+  const isLoginPage = location.pathname === '/login';
+  const isSignupPage = location.pathname === '/signup';
+  const isAuthPage = isLoginPage || isSignupPage || 
+                     location.pathname === '/forgot-password' || 
+                     location.pathname === '/reset-password';
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -55,9 +63,6 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-8">
             <Link to="/about" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
               About
-            </Link>
-            <Link to="/resources" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
-              Resources
             </Link>
             <Link to="/custom-roadmap" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
               Custom Roadmap
@@ -110,22 +115,35 @@ const Navbar = () => {
                 )}
               </div>
             ) : (
-              <Link
-                to="/login"
-                className="font-medium text-white px-5 py-2 rounded-full shadow-md font-mukta"
-                style={{
-                  background: 'linear-gradient(to right, #F97316, #9333EA)',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(to right, #EA580C, #7E22CE)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(to right, #F97316, #9333EA)';
-                }}
-              >
-                Login
-              </Link>
+              <div className="flex space-x-4">
+                {!isLoginPage && (
+                  <Link
+                    to="/login"
+                    className="font-medium text-white px-5 py-2 rounded-full shadow-md font-mukta"
+                    style={{
+                      background: 'linear-gradient(to right, #F97316, #9333EA)',
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(to right, #EA580C, #7E22CE)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(to right, #F97316, #9333EA)';
+                    }}
+                  >
+                    Login
+                  </Link>
+                )}
+                
+                {!isSignupPage && (
+                  <Link
+                    to="/signup"
+                    className="font-medium text-gray-700 border-2 border-gray-300 px-5 py-2 rounded-full shadow-sm hover:bg-gray-50 transition-colors font-mukta"
+                  >
+                    Sign Up
+                  </Link>
+                )}
+              </div>
             )}
           </div>
 
@@ -154,9 +172,6 @@ const Navbar = () => {
             <div className="flex flex-col space-y-4">
               <Link to="/about" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
                 About
-              </Link>
-              <Link to="/resources" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
-                Resources
               </Link>
               <Link to="/custom-roadmap" className="text-gray-700 hover:text-purple-600 transition-colors duration-300 font-mukta">
                 Custom Roadmap
@@ -200,16 +215,29 @@ const Navbar = () => {
                   </div>
                 </>
               ) : (
-                <Link
-                  to="/login"
-                  className="text-white px-4 py-2 rounded-full text-center font-medium font-mukta"
-                  style={{
-                    background: 'linear-gradient(to right, #F97316, #9333EA)',
-                    transition: 'all 0.3s ease',
-                  }}
-                >
-                  Login
-                </Link>
+                <div className="border-t border-gray-200 pt-4 flex flex-col space-y-3">
+                  {!isLoginPage && (
+                    <Link
+                      to="/login"
+                      className="text-white px-4 py-2 rounded-full text-center font-medium font-mukta"
+                      style={{
+                        background: 'linear-gradient(to right, #F97316, #9333EA)',
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      Login
+                    </Link>
+                  )}
+                  
+                  {!isSignupPage && (
+                    <Link
+                      to="/signup"
+                      className="text-gray-700 border border-gray-300 px-4 py-2 rounded-full text-center font-medium font-mukta"
+                    >
+                      Sign Up
+                    </Link>
+                  )}
+                </div>
               )}
             </div>
           </div>

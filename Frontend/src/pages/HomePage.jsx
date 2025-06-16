@@ -14,6 +14,9 @@ const HomePage = () => {
     setError(null);
     setIsValidating(true);
 
+    // Save the raw input to localStorage so we can retrieve it after login
+    localStorage.setItem('pendingLearningTopic', learningTopic);
+
     try {
       // Start the timer
       const startTime = performance.now();

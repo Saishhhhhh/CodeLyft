@@ -459,7 +459,7 @@ async def find_best_playlist_endpoint(
                     like_ratio_text = "No like/view data → +0.0"
                 
                 # Log the score with detailed parameters
-                verdict = "⭐ EXCEPTIONAL" if score >= 8.0 else "👍 GOOD" if score >= 7.0 else "⚠️ AVERAGE" if score >= 6.0 else "❌ REJECTED"
+                verdict = "⭐ EXCEPTIONAL" if score >= 8.0 else "👍 GOOD" if score >= 7.0 else "⚠️ AVERAGE" if score >= 5.0 else "❌ REJECTED"
                 
                 logger.info(f"[Playlist {current_playlist_index}] '{title}' - Score: {score:.2f}/10.0 - {verdict}")
                 logger.info(f"  URL: {url}")
@@ -521,17 +521,174 @@ async def find_best_playlist_endpoint(
             logger.info(f"Evaluated {current_playlist_index} playlists in {elapsed_time:.2f}s using parallel processing")
             
             # Handle case where no suitable playlist was found
-            if result is None or not isinstance(result, dict):
-                logger.warning(f"No suitable playlist found for query: '{query}' after {elapsed_time:.2f}s")
-                return {
-                    "status": "no_results",
-                    "message": "No suitable playlists found for this query",
+            if result is None:
+                logger.warning(f"No playlists found for query: '{query}' after {elapsed_time:.2f}s")
+                
+                # MODIFIED: Instead of returning "no_results", let's search for the best playlist
+                logger.info("Searching for best available playlist (even if not exceptional)...")
+                
+                # Import and execute search_playlists directly
+                playlists_response = Youtube.search_playlists(query, limit=10)
+                
+                if not playlists_response or 'results' not in playlists_response or not playlists_response['results']:
+                    logger.warning("No playlists found in direct search")
+                    return {
+                        "status": "no_results",
+                        "message": "No suitable playlists found for this query",
+                        "query": query,
+                        "elapsed_seconds": elapsed_time,
+                        "playlists_evaluated": current_playlist_index,
+                        "parallel_processing": True
+                    }
+                    
+                playlists = playlists_response['results']
+                logger.info(f"Found {len(playlists)} playlists in direct search")
+                
+                # Track all scored playlists
+                all_scored_playlists = []
+                
+                # Process each playlist
+                for idx, playlist_info in enumerate(playlists):
+                    try:
+                        playlist_id = playlist_info.get('id')
+                        if not playlist_id:
+                            continue
+                            
+                        logger.info(f"Evaluating playlist {idx+1}: {playlist_info.get('title', 'Unknown')}")
+                        
+                        # Get playlist data
+                        playlist_data = Youtube.get_playlist_videos(playlist_id, limit=0, max_details=1)
+                        
+                        # Score the playlist
+                        score, details = original_score_playlist(playlist_data, query, debug, None)
+                        
+                        if score is not None:
+                            # Create result object
+                            playlist_result = {
+                                "playlist": playlist_data,
+                                "score": score,
+                                "details": details,
+                                "verdict": Youtube.get_verdict(score)
+                            }
+                            all_scored_playlists.append(playlist_result)
+                            logger.info(f"Scored playlist: {score}/10.0 - {Youtube.get_verdict(score)}")
+                    except Exception as e:
+                        logger.error(f"Error processing playlist {idx+1}: {e}")
+                
+                # Check if we found any valid playlists
+                if not all_scored_playlists:
+                    logger.warning("No playlists could be properly scored")
+                    return {
+                        "status": "no_results",
+                        "message": "No suitable playlists found for this query",
+                        "query": query,
+                        "elapsed_seconds": elapsed_time,
+                        "playlists_evaluated": current_playlist_index,
+                        "parallel_processing": True
+                    }
+                
+                # Sort by score and get the best one
+                all_scored_playlists.sort(key=lambda x: x["score"], reverse=True)
+                best_result = all_scored_playlists[0]
+                
+                logger.info(f"Found best non-exceptional playlist: '{best_result['playlist'].get('title', 'Unknown')}'")
+                logger.info(f"Score: {best_result['score']}/10.0 - {best_result['verdict']}")
+                
+                # Clean any repeated titles
+                cleaned_result = clean_repeated_title(best_result)
+                
+                # Extract the best playlist
+                winning_playlist = cleaned_result.get("playlist", {})
+                winning_score = cleaned_result.get("score", 0)
+                winning_verdict = cleaned_result.get("verdict", "Unknown")
+                
+                # Extract technologies from result (new feature)
+                technologies = cleaned_result.get("technologies", [])
+                
+                # Log the best playlist details
+                logger.info(f"Best playlist found in {elapsed_time:.2f}s: '{winning_playlist.get('title', 'Unknown')}'")
+                logger.info(f"URL: {winning_playlist.get('url', 'Unknown')}")
+                logger.info(f"Channel: {winning_playlist.get('channel', {}).get('name', 'Unknown')}")
+                logger.info(f"Videos: {len(winning_playlist.get('videos', []))}")
+                logger.info(f"Score: {winning_score}/10.0 - Verdict: {winning_verdict}")
+                
+                # Log technologies if available
+                if technologies:
+                    logger.info(f"Technologies: {', '.join(technologies)}")
+                
+                # Log the scoring breakdown
+                if "details" in cleaned_result:
+                    details = cleaned_result["details"]
+                    logger.info("Scoring breakdown:")
+                    for key, value in details.items():
+                        if key.endswith("_score"):
+                            logger.info(f"  - {key}: +{float(value):.1f}")
+                
+                # Determine the response status based on score
+                is_exceptional = winning_score >= 8.0
+                response_status = "success" if is_exceptional else "best_available"
+                response_message = "Found exceptional playlist" if is_exceptional else "No exceptional playlist found, but returning best available option"
+                
+                # Prepare the response with the best playlist
+                response = {
+                    "status": response_status,
+                    "message": response_message,
                     "query": query,
                     "elapsed_seconds": elapsed_time,
                     "playlists_evaluated": current_playlist_index,
-                    "parallel_processing": True
+                    "parallel_processing": True,
+                    "playlist": {
+                        "id": winning_playlist.get("id"),
+                        "title": winning_playlist.get("title"),
+                        "url": winning_playlist.get("url"),
+                        "channel": winning_playlist.get("channel"),
+                        "channel_url": winning_playlist.get("channel_url"),
+                        "video_count": len(winning_playlist.get("videos", [])),
+                        "direct_view_count": winning_playlist.get("direct_view_count"),
+                        "direct_view_count_formatted": winning_playlist.get("direct_view_count_formatted"),
+                        "videos": []
+                    },
+                    "score": winning_score,
+                    "verdict": winning_verdict,
+                    "details": cleaned_result.get("details", {}),
+                    "technologies": technologies
                 }
                 
+                # Process videos (with optional limit)
+                all_videos = winning_playlist.get("videos", [])
+                
+                # Apply video limit if specified
+                limited_videos = all_videos if max_videos <= 0 else all_videos[:max_videos]
+                
+                # Log if videos were truncated
+                if 0 < max_videos < len(all_videos):
+                    logger.info(f"Truncating videos from {len(all_videos)} to {max_videos} for response")
+                    response["playlist"]["videos_truncated"] = True
+                    response["playlist"]["videos_total"] = len(all_videos)
+                    response["playlist"]["videos_shown"] = max_videos
+                
+                # Add video data to response
+                for video in limited_videos:
+                    video_data = {
+                        "id": video.get("id"),
+                        "title": video.get("title"),
+                        "url": video.get("url"),
+                        "channel": video.get("channel"),
+                        "duration": video.get("duration")
+                    }
+                    
+                    # Include additional fields if available
+                    for field in ["duration_seconds", "likes", "likes_formatted", 
+                                 "views", "views_formatted", "publish_date"]:
+                        if field in video:
+                            video_data[field] = video[field]
+                            
+                    response["playlist"]["videos"].append(video_data)
+                
+                logger.info(f"Returning best available playlist with score {winning_score}/10.0")
+                return response
+            
+            # Process the result from the original function
             # Clean any repeated titles in the result
             cleaned_result = clean_repeated_title(result)
             
@@ -562,9 +719,15 @@ async def find_best_playlist_endpoint(
                     if key.endswith("_score"):
                         logger.info(f"  - {key}: +{float(value):.1f}")
             
+            # Determine the response status based on score
+            is_exceptional = winning_score >= 8.0
+            response_status = "success" if is_exceptional else "best_available"
+            response_message = "Found exceptional playlist" if is_exceptional else "No exceptional playlist found, but returning best available option"
+            
             # Prepare the response with the best playlist
             response = {
-                "status": "success",
+                "status": response_status,
+                "message": response_message,
                 "query": query,
                 "elapsed_seconds": elapsed_time,
                 "playlists_evaluated": current_playlist_index,

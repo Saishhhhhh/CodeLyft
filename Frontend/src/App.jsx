@@ -37,7 +37,15 @@ const ProtectedRoute = ({ children }) => {
   
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Check if we're trying to access the questions page and if we have a pending prompt
+    const pendingLearningTopic = localStorage.getItem('pendingLearningTopic');
+    const redirectState = { from: location };
+    
+    if (location.pathname === '/questions' && pendingLearningTopic) {
+      redirectState.hasPendingPrompt = true;
+    }
+    
+    return <Navigate to="/login" state={redirectState} replace />;
   }
   
   return children;
@@ -90,7 +98,14 @@ const OAuthCallback = () => {
       
       // Wait a moment to ensure token is stored before redirecting
       setTimeout(() => {
-        navigate('/dashboard');
+        // Check if there's a pending prompt to process
+        const pendingLearningTopic = localStorage.getItem('pendingLearningTopic');
+        
+        if (pendingLearningTopic) {
+          navigate('/questions');
+        } else {
+          navigate('/dashboard');
+        }
       }, 500);
     } else if (!loading) {
       // If no token and not loading, redirect to login
@@ -179,18 +194,22 @@ function App() {
           <Route 
             path="/custom-roadmap" 
             element={
-              <MainLayout>
-                <CustomRoadmapPage />
-              </MainLayout>
+              <ProtectedRoute>
+                <MainLayout>
+                  <CustomRoadmapPage />
+                </MainLayout>
+              </ProtectedRoute>
             } 
           />
           
           <Route 
             path="/custom-roadmap/:id" 
             element={
-              <MainLayout>
-                <CustomRoadmapPage />
-              </MainLayout>
+              <ProtectedRoute>
+                <MainLayout>
+                  <CustomRoadmapPage />
+                </MainLayout>
+              </ProtectedRoute>
             } 
           />
           
@@ -239,24 +258,32 @@ function App() {
             </MainLayout>
           } />
           <Route path="/questions" element={
-            <MainLayout>
-              <RoadmapQuestionsPage />
-            </MainLayout>
+            <ProtectedRoute>
+              <MainLayout>
+                <RoadmapQuestionsPage />
+              </MainLayout>
+            </ProtectedRoute>
           } />
           <Route path="/roadmap" element={
-            <MainLayout>
-              <RoadmapResultPage />
-            </MainLayout>
+            <ProtectedRoute>
+              <MainLayout>
+                <RoadmapResultPage />
+              </MainLayout>
+            </ProtectedRoute>
           } />
           <Route path="/test-roadmap" element={
-            <MainLayout>
-              <RoadmapTestPage />
-            </MainLayout>
+            <ProtectedRoute>
+              <MainLayout>
+                <RoadmapTestPage />
+              </MainLayout>
+            </ProtectedRoute>
           } />
           <Route path="/roadmap-progress" element={
-            <MainLayout>
-              <RoadmapProgressPage />
-            </MainLayout>
+            <ProtectedRoute>
+              <MainLayout>
+                <RoadmapProgressPage />
+              </MainLayout>
+            </ProtectedRoute>
           } />
           
           {/* 404 Not Found */}

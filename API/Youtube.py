@@ -1271,7 +1271,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                     print(f"{i+2}. {p['playlist']['title']} - Score: {p['score']:.1f}/10.0 - {p['verdict']}")
         
         # Return the best playlist regardless of score
-            return best
+        return best
     elif debug:
         print("\n❌ No playlists could be properly evaluated.")
     
@@ -1726,7 +1726,8 @@ def get_verdict(score):
         return "⭐ EXCEPTIONAL - Use immediately, stop searching"
     elif score >= 7.0:  # 70% of 10.0
         return "👍 GOOD - Use unless exceptional one found"
-    elif score >= 6.0:  # 60% of 10.0
+    # Changed from 6.0 to 5.0
+    elif score >= 5.0:  # 50% of 10.0
         return "⚠️ AVERAGE - Keep as backup"
     else:
         return "❌ REJECT - Skip playlist"

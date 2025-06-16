@@ -615,15 +615,22 @@ export const searchPlaylists = async (query, limit = 10) => {
 };
 
 /**
- * Rate a YouTube video based on specified criteria
- * Note: This is only used for individual videos now, not playlists
+ * Rate a video based on multiple criteria with detailed scoring
+ * 
+ * Video Quality Thresholds:
+ * - Exceptional: ≥4.8 points (normalized to ≥8.0/10)
+ * - Good: ≥4.0 points (normalized to ≥6.7/10)  
+ * - Average: ≥3.0 points (normalized to ≥5.0/10)
+ * - Rejected: <3.0 points (normalized to <5.0/10)
+ * - Automatic Rejection: Duration <40 minutes
+ * 
  * @param {Object} video - The video object to rate
- * @param {boolean} useGroqRelevance - Whether to use Groq for relevance checking
- * @returns {number|Promise<number>} - Rating from 0-6 or a Promise resolving to a rating
+ * @returns {number} - Rating from 0 to 6.0
  */
 const rateVideo = async (video) => {
   if (!video) return 0;
   
+  console.log(`\n📊 VIDEO SCORING: "${video.title?.substring(0, 50)}..."`);
   let score = 0;
   const currentYear = new Date().getFullYear();
   
@@ -655,6 +662,8 @@ const rateVideo = async (video) => {
   // Get views and likes as numbers
   const views = getNumberFromFormatted(video.views || video.views_formatted);
   const likes = getNumberFromFormatted(video.likes || video.likes_formatted);
+  
+  console.log(`Views: ${views.toLocaleString()} | Likes: ${likes.toLocaleString()}`);
   
   // Duration in minutes (if available)
   let durationMinutes = 0;
@@ -752,6 +761,7 @@ const rateVideo = async (video) => {
           publishYear = new Date(video.publish_date).getFullYear();
         }
       }
+      console.log(`Published year: ${publishYear}`);
     } catch (e) {
       console.log('Could not parse publish date:', video.publish_date);
     }
@@ -763,13 +773,13 @@ const rateVideo = async (video) => {
                         video.title?.toLowerCase().includes('complete course') ||
                         video.title?.toLowerCase().includes('full course');
                      
-  console.log(`Video "${video.title}" - Duration: ${durationMinutes} mins, Oneshot: ${isLikelyOneshot}`);
+  console.log(`Video duration: ${durationMinutes} mins, Oneshot: ${isLikelyOneshot}`);
   
   // Make duration filtering consistent for all videos
   // Apply the same minimum duration requirement for all videos
   if (durationMinutes < 40) {
     // All videos should be at least 40 minutes
-    console.log(`Rejecting video due to short duration (${durationMinutes} mins): ${video.title}`);
+    console.log(`❌ REJECTED: Video duration too short (${durationMinutes} mins) - minimum 40 minutes required`);
     return 0;
   }
   
@@ -779,56 +789,116 @@ const rateVideo = async (video) => {
   else if (durationMinutes >= 90) durationBonus = 0.3; // 1.5+ hours
   
   if (durationBonus > 0) {
-    console.log(`Adding duration bonus: +${durationBonus} points`);
+    console.log(`✓ Duration bonus: +${durationBonus} points (${durationMinutes} mins)`);
     score += durationBonus;
   }
   
   // Give priority to one-shot/complete course videos
   if (isLikelyOneshot) {
     const oneshotBonus = 0.7;
-    console.log(`Adding oneshot/complete course bonus: +${oneshotBonus} points`);
+    console.log(`✓ Oneshot/complete course bonus: +${oneshotBonus} points`);
     score += oneshotBonus;
   }
   
   // Step 2: Engagement & Popularity Score (Out of 6 points total)
+  console.log(`\nEngagement & Popularity Scoring:`);
   
   // A. Views (Max 3 Points)
+  let viewsScore = 0;
   if (views >= 500000) {
-    score += 3;
+    viewsScore = 3;
   } else if (views >= 250000) {
-    score += 2;
+    viewsScore = 2;
   } else if (views >= 100000) {
-    score += 1;
+    viewsScore = 1;
+  }
+  
+  if (viewsScore > 0) {
+    console.log(`✓ Views: +${viewsScore} points (${views.toLocaleString()})`);
+    score += viewsScore;
+  } else {
+    console.log(`✗ Views: +0 points (${views.toLocaleString()} - below 100k threshold)`);
   }
   
   // B. Likes (Max 1.5 Points)
+  let likesScore = 0;
   if (likes >= 5000) {
-    score += 1.5;
+    likesScore = 1.5;
   } else if (likes >= 2000) {
-    score += 1;
+    likesScore = 1;
   } else if (likes >= 1000) {
-    score += 0.5;
+    likesScore = 0.5;
+  }
+  
+  if (likesScore > 0) {
+    console.log(`✓ Likes: +${likesScore} points (${likes.toLocaleString()})`);
+    score += likesScore;
+  } else {
+    console.log(`✗ Likes: +0 points (${likes.toLocaleString()} - below 1k threshold)`);
   }
   
   // C. Like-to-View Ratio (Max 0.5 Points)
+  let ratioScore = 0;
+  let ratio = 0;
+  
   if (views > 0 && likes > 0) {
-    const ratio = likes / views;
+    ratio = likes / views;
     if (ratio >= 0.04) {
-      score += 0.5;
+      ratioScore = 0.5;
     } else if (ratio >= 0.02) {
-      score += 0.25;
+      ratioScore = 0.25;
     }
   }
   
-  // D. Recency (Max 1 Point)
-  if (publishYear >= 2024) {
-    score += 1;
-  } else if (publishYear >= 2022) {
-    score += 0.5;
+  if (ratioScore > 0) {
+    console.log(`✓ Like-to-view ratio: +${ratioScore} points (${(ratio * 100).toFixed(2)}%)`);
+    score += ratioScore;
+  } else if (views > 0 && likes > 0) {
+    console.log(`✗ Like-to-view ratio: +0 points (${(ratio * 100).toFixed(2)}% - below 2% threshold)`);
+  } else {
+    console.log(`✗ Like-to-view ratio: +0 points (no data available)`);
   }
   
-  // Return final score (max 6)
-  return Math.min(6, score);
+  // D. Recency (Max 1 Point)
+  let recencyScore = 0;
+  if (publishYear >= 2024) {
+    recencyScore = 1;
+  } else if (publishYear >= 2022) {
+    recencyScore = 0.5;
+  }
+  
+  if (recencyScore > 0) {
+    console.log(`✓ Recency: +${recencyScore} points (${publishYear})`);
+    score += recencyScore;
+  } else if (publishYear > 0) {
+    console.log(`✗ Recency: +0 points (${publishYear} - too old)`);
+  } else {
+    console.log(`✗ Recency: +0 points (publish year unknown)`);
+  }
+  
+  // Cap at maximum score of 6
+  const finalScore = Math.min(6, score);
+  
+  // Define quality categories
+  let quality = 'Rejected';
+  if (finalScore >= 4.8) {
+    quality = 'Exceptional';
+    console.log(`\n⭐ EXCEPTIONAL VIDEO: ${finalScore}/6.0 points`);
+  } else if (finalScore >= 4.0) {
+    quality = 'Good';
+    console.log(`\n👍 GOOD VIDEO: ${finalScore}/6.0 points`);
+  } else if (finalScore >= 3.0) {
+    quality = 'Average';
+    console.log(`\n⚠️ AVERAGE VIDEO: ${finalScore}/6.0 points`);
+  } else {
+    console.log(`\n❌ REJECTED VIDEO: ${finalScore}/6.0 points`);
+  }
+  
+  // For comparison with playlists
+  const normalizedScore = (finalScore / 6) * 10;
+  console.log(`Normalized score (out of 10): ${normalizedScore.toFixed(1)}/10.0`);
+  
+  return finalScore;
 };
 
 /**
@@ -1126,7 +1196,7 @@ const ratePlaylist = async (playlist) => {
     thresholds: {
       exceptional: score >= 8.0,
       good: score >= 7.0,
-      average: score >= 6.0
+      average: score >= 5.0
     }
   };
 };
@@ -1327,8 +1397,8 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
     let playlistScore = 0;
     let bestPlaylist = null;
     
-    // Check if we found a playlist and if it meets minimum quality threshold (score ≥ 6.0)
-    if (bestPlaylistResult && bestPlaylistResult.playlist && bestPlaylistResult.score >= 6.0) {
+    // Check if we found a playlist and if it meets minimum quality threshold (score ≥ 5.0)
+    if (bestPlaylistResult && bestPlaylistResult.playlist && bestPlaylistResult.score >= 5.0) {
       playlistScore = bestPlaylistResult.score;
       console.log(`Found playlist: ${bestPlaylistResult.playlist.title} (Score: ${playlistScore}/10)`);
       
@@ -1595,7 +1665,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       }
     }
     
-    // If we found a video above minimum threshold (rating ≥ 3.0)
+    // Only consider videos that meet minimum quality threshold (rating ≥ 3.0, otherwise rejected)
     if (highestRatedVideo && highestRating >= 3.0) {
       console.log(`Best video found: ${highestRatedVideo.title} (Score: ${highestRating}/6)`);
       
@@ -1603,8 +1673,23 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
       highestRatedVideo.videoRating = highestRating.toFixed(1);
       highestRatedVideo.durationMinutes = highestDuration;
       
-      // If the video is excellent (≥4.5), return it immediately with its technologies
-      if (highestRating >= 4.5) {
+      // Define video quality based on rating
+      let videoQuality = "Rejected";
+      if (highestRating >= 4.8) {
+        videoQuality = "Exceptional";
+        console.log(`📊 VIDEO QUALITY: ⭐ EXCEPTIONAL (${highestRating}/6.0)`);
+      } else if (highestRating >= 4.0) {
+        videoQuality = "Good";
+        console.log(`📊 VIDEO QUALITY: 👍 GOOD (${highestRating}/6.0)`);
+      } else if (highestRating >= 3.0) {
+        videoQuality = "Average";
+        console.log(`📊 VIDEO QUALITY: ⚠️ AVERAGE (${highestRating}/6.0)`);
+      }
+      
+      highestRatedVideo.quality = videoQuality;
+      
+      // If the video is excellent (≥4.8), return it immediately with its technologies
+      if (highestRating >= 4.8) {
         console.log(`Found excellent video (${highestRating}/6), with technologies from relevance check: ${highestRatedVideo.technologies?.join(', ') || 'none'}`);
         
         // If this video covers multiple topics, add it to shared resources

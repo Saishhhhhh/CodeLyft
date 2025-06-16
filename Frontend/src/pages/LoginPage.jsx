@@ -69,8 +69,20 @@ const LoginPage = () => {
       // Call login from auth context
       await login({ email, password });
       
-      // Redirect to dashboard on success
-      navigate('/dashboard');
+      // Check if we have a pending learning topic and handle redirection accordingly
+      const pendingLearningTopic = localStorage.getItem('pendingLearningTopic');
+      const hasPendingPrompt = location.state?.hasPendingPrompt;
+      
+      if (pendingLearningTopic && (hasPendingPrompt || location.pathname === '/questions')) {
+        // Redirect to questions page to continue with the prompt
+        navigate('/questions');
+      } else if (location.state?.from && location.state.from.pathname !== '/login') {
+        // Redirect to the intended page if specified
+        navigate(location.state.from.pathname);
+      } else {
+        // Default redirect to dashboard
+        navigate('/dashboard');
+      }
     } catch (err) {
       // Error is handled in the auth context
       console.error('Login error:', err);
