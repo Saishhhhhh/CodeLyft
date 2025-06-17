@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useTheme } from '../../context/ThemeContext';
 
 /**
  * A reusable button component with loading state
@@ -22,27 +23,49 @@ const LoadingButton = ({
   className = "",
   children
 }) => {
+  const { darkMode } = useTheme();
+
+  // Define colors based on theme
+  const colors = {
+    primary: darkMode ? '#8B5CF6' : '#4F46E5', // Vibrant purple for dark mode, Indigo for light
+    secondary: darkMode ? '#10B981' : '#059669', // Emerald
+    accent: darkMode ? '#F59E0B' : '#D97706', // Amber
+    tertiary: darkMode ? '#EC4899' : '#DB2777', // Pink
+    
+    // Background colors
+    background: darkMode ? '#0F172A' : '#ffffff', // Deeper blue-black for dark mode
+    buttonBg: darkMode ? '#8B5CF6' : '#4F46E5', // Full opacity button background
+    
+    // Text colors
+    text: darkMode ? '#F8FAFC' : '#111827', // Brighter white for dark mode
+    textMuted: darkMode ? '#94A3B8' : '#6B7280', // Slate 400 for better readability
+    
+    // UI elements
+    border: darkMode ? '#334155' : '#E5E7EB', // Slate 600 for more visible borders
+    shadow: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)', // Stronger shadows
+  };
+
   return (
     <motion.button
-      whileHover={{ scale: disabled || isLoading ? 1 : 1.02 }}
-      whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
       type={type}
-      disabled={disabled || isLoading}
       onClick={onClick}
-      className={`w-full py-3 px-4 rounded-lg font-medium text-white ${
-        disabled || isLoading 
-          ? 'bg-purple-700 cursor-not-allowed' 
-          : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
-      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 shadow-lg shadow-purple-500/30 ${className}`}
+      disabled={isLoading || disabled}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      className={`w-full py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200 ${
+        isLoading || disabled ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-lg'
+      }`}
+      style={{ 
+        backgroundColor: colors.buttonBg,
+        color: '#FFFFFF',
+        boxShadow: `0 4px 6px ${colors.shadow}`,
+      }}
     >
       {isLoading ? (
-        <span className="flex items-center justify-center">
-          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
+        <div className="flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
           {loadingText}
-        </span>
+        </div>
       ) : children || text}
     </motion.button>
   );

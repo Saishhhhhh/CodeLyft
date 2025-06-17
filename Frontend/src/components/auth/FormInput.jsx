@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { useTheme } from '../../context/ThemeContext';
 
 /**
  * A reusable form input component for text, email, etc.
@@ -9,9 +9,8 @@ import { motion } from 'framer-motion';
  * @param {string} props.value - Input value
  * @param {function} props.onChange - Input change handler
  * @param {string} [props.placeholder] - Input placeholder
- * @param {boolean} [props.required=true] - Whether the input is required
- * @param {string} [props.helpText] - Optional help text to display below input
- * @param {string} [props.className] - Additional class names for the container
+ * @param {boolean} [props.required=false] - Whether the input is required
+ * @param {string} [props.error] - Error message for the input
  */
 const FormInput = ({
   id,
@@ -20,32 +19,64 @@ const FormInput = ({
   value,
   onChange,
   placeholder = "",
-  required = true,
-  helpText,
-  className = "",
+  required = false,
+  error
 }) => {
+  const { darkMode } = useTheme();
+
+  // Define colors based on theme
+  const colors = {
+    primary: darkMode ? '#8B5CF6' : '#4F46E5', // Vibrant purple for dark mode, Indigo for light
+    secondary: darkMode ? '#10B981' : '#059669', // Emerald
+    accent: darkMode ? '#F59E0B' : '#D97706', // Amber
+    tertiary: darkMode ? '#EC4899' : '#DB2777', // Pink
+    
+    // Background colors
+    background: darkMode ? '#0F172A' : '#ffffff', // Deeper blue-black for dark mode
+    inputBg: darkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)', // Semi-transparent input background
+    
+    // Text colors
+    text: darkMode ? '#F8FAFC' : '#111827', // Brighter white for dark mode
+    textMuted: darkMode ? '#94A3B8' : '#6B7280', // Slate 400 for better readability
+    
+    // UI elements
+    border: darkMode ? '#334155' : '#E5E7EB', // Slate 600 for more visible borders
+    error: darkMode ? '#EF4444' : '#DC2626', // Red for errors
+  };
+
   return (
-    <div className={className}>
-      {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-200 mb-1">
-          {label}
-        </label>
-      )}
-      <motion.input
-        whileFocus={{ scale: 1.01 }}
-        transition={{ type: "spring", stiffness: 400, damping: 10 }}
-        type={type}
-        id={id}
-        value={value}
-        onChange={onChange}
-        className="w-full px-4 py-3 bg-white/5 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400"
-        placeholder={placeholder}
-        required={required}
-        aria-label={label || id}
-      />
-      {helpText && (
-        <p className="mt-1 text-xs text-gray-400">{helpText}</p>
-      )}
+    <div>
+      <label 
+        htmlFor={id} 
+        className="block text-sm font-medium mb-2"
+        style={{ color: colors.text }}
+      >
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          className={`w-full px-4 py-3 rounded-lg text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            error ? 'border-2' : 'border'
+          }`}
+          style={{ 
+            backgroundColor: colors.inputBg,
+            borderColor: error ? colors.error : colors.border,
+            color: colors.text,
+            boxShadow: error ? `0 0 0 1px ${colors.error}` : 'none',
+          }}
+        />
+        {error && (
+          <p className="mt-1 text-sm" style={{ color: colors.error }}>
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 };

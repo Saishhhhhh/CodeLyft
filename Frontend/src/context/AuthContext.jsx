@@ -112,20 +112,25 @@ export const AuthProvider = ({ children }) => {
     
     try {
       const response = await loginUser(credentials);
-      setUser(response.user);
       
-      // Check if there's a pending prompt to validate
-      if (hasPendingPrompt()) {
-        const validationResult = await validatePendingPrompt();
-        setPendingValidation(validationResult);
+      if (response.success && response.user) {
+        setUser(response.user);
         
-        // If validation failed, make sure the prompt is preserved
-        if (validationResult && !validationResult.isValid && validationResult.prompt) {
-          storePromptForValidation(validationResult.prompt);
+        // Check if there's a pending prompt to validate
+        if (hasPendingPrompt()) {
+          const validationResult = await validatePendingPrompt();
+          setPendingValidation(validationResult);
+          
+          // If validation failed, make sure the prompt is preserved
+          if (validationResult && !validationResult.isValid && validationResult.prompt) {
+            storePromptForValidation(validationResult.prompt);
+          }
         }
+        
+        return response;
+      } else {
+        throw new Error('Login failed. Please check your credentials.');
       }
-      
-      return response;
     } catch (err) {
       setError(err.message);
       throw err;

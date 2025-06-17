@@ -3,10 +3,32 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { verifyOTP, resetPassword } from '../services/authService';
 import AuthLayout from '../components/auth/AuthLayout';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { useTheme } from '../context/ThemeContext';
 
 const ResetPasswordPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { darkMode } = useTheme();
+  
+  // Define colors based on theme
+  const colors = {
+    primary: darkMode ? '#4F46E5' : '#4F46E5', // Indigo - main brand color
+    secondary: darkMode ? '#DA2C38' : '#DA2C38', // YouTube Red - accent color
+    accent: darkMode ? '#8B5CF6' : '#8B5CF6', // Purple - complementary accent
+    
+    // Background colors
+    background: darkMode ? '#111827' : '#F9F9F9', // Dark Gray / Light Gray
+    cardBg: darkMode ? '#1E293B' : '#FFFFFF', // Darker background / White
+    
+    // Text colors
+    text: darkMode ? '#F9F9F9' : '#111827', // Light Gray / Dark Gray
+    textMuted: darkMode ? '#94A3B8' : '#6B7280', // Light gray / Medium gray
+    
+    // UI elements
+    border: darkMode ? '#334155' : '#E5E7EB', // Medium-dark gray / Light gray
+    shadow: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)', // Shadows
+  };
+
   const [formData, setFormData] = useState({
     email: '',
     otp: ['', '', '', ''],
@@ -204,7 +226,7 @@ const ResetPasswordPage = () => {
       {step === 1 ? (
         <form onSubmit={handleVerifyOTP} className="space-y-6">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+            <label htmlFor="email" className="block text-sm font-medium" style={{ color: colors.text }}>
               Email Address
             </label>
             <div className="mt-1">
@@ -217,19 +239,26 @@ const ResetPasswordPage = () => {
                 value={formData.email}
                 onChange={handleChange}
                 readOnly={!!location.state?.email}
-                className={`appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white sm:text-sm ${location.state?.email ? 'opacity-75 cursor-not-allowed' : ''}`}
+                className="appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 sm:text-sm"
+                style={{ 
+                  borderColor: colors.border,
+                  backgroundColor: colors.cardBg,
+                  color: colors.text,
+                  opacity: location.state?.email ? 0.75 : 1,
+                  cursor: location.state?.email ? 'not-allowed' : 'auto'
+                }}
                 placeholder="your@email.com"
               />
             </div>
             {location.state?.email && (
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
                 Email address from previous step (cannot be changed)
               </p>
             )}
           </div>
           
           <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-gray-300">
+            <label htmlFor="otp" className="block text-sm font-medium" style={{ color: colors.text }}>
               Verification Code (OTP)
             </label>
             <div className="mt-1 flex justify-center gap-2">
@@ -244,12 +273,17 @@ const ResetPasswordPage = () => {
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
                   onPaste={index === 0 ? handleOtpPaste : undefined}
-                  className="appearance-none w-14 h-14 text-center px-0 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white text-xl font-bold"
+                  className="appearance-none w-14 h-14 text-center px-0 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 text-xl font-bold"
+                  style={{ 
+                    borderColor: colors.border,
+                    backgroundColor: colors.cardBg,
+                    color: colors.text
+                  }}
                   autoFocus={index === 0}
                 />
               ))}
             </div>
-            <p className="mt-1 text-xs text-gray-400 text-center">
+            <p className="mt-1 text-xs text-center" style={{ color: colors.textMuted }}>
               Enter the 4-digit code sent to your email
             </p>
           </div>
@@ -258,19 +292,20 @@ const ResetPasswordPage = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                isSubmitting ? 'bg-purple-700' : 'bg-purple-600 hover:bg-purple-700'
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500`}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ 
+                backgroundColor: isSubmitting ? `${colors.primary}80` : colors.primary
+              }}
             >
               {isSubmitting ? 'Verifying...' : 'Verify Code'}
             </button>
           </div>
           
           <div className="flex items-center justify-between">
-            <Link to="/forgot-password" className="text-sm text-purple-400 hover:text-purple-300">
+            <Link to="/forgot-password" className="text-sm hover:underline" style={{ color: colors.primary }}>
               Didn't receive a code?
             </Link>
-            <Link to="/login" className="text-sm text-purple-400 hover:text-purple-300">
+            <Link to="/login" className="text-sm hover:underline" style={{ color: colors.primary }}>
               Back to login
             </Link>
           </div>
@@ -278,7 +313,7 @@ const ResetPasswordPage = () => {
       ) : (
         <form onSubmit={handleResetPassword} className="space-y-6">
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+            <label htmlFor="password" className="block text-sm font-medium" style={{ color: colors.text }}>
               New Password
             </label>
             <div className="mt-1 relative">
@@ -289,7 +324,12 @@ const ResetPasswordPage = () => {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white sm:text-sm"
+                className="appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 sm:text-sm"
+                style={{ 
+                  borderColor: colors.border,
+                  backgroundColor: colors.cardBg,
+                  color: colors.text
+                }}
                 autoFocus
               />
               <button
@@ -298,19 +338,19 @@ const ResetPasswordPage = () => {
                 onClick={togglePasswordVisibility}
               >
                 {showPassword ? (
-                  <FaEyeSlash className="h-5 w-5 text-gray-400" />
+                  <FaEyeSlash className="h-5 w-5" style={{ color: colors.textMuted }} />
                 ) : (
-                  <FaEye className="h-5 w-5 text-gray-400" />
+                  <FaEye className="h-5 w-5" style={{ color: colors.textMuted }} />
                 )}
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
               Password must be at least 8 characters and include uppercase, lowercase, number, and special character.
             </p>
           </div>
           
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium" style={{ color: colors.text }}>
               Confirm New Password
             </label>
             <div className="mt-1 relative">
@@ -321,7 +361,12 @@ const ResetPasswordPage = () => {
                 required
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white sm:text-sm"
+                className="appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 sm:text-sm"
+                style={{ 
+                  borderColor: colors.border,
+                  backgroundColor: colors.cardBg,
+                  color: colors.text
+                }}
               />
               <button
                 type="button"
@@ -329,9 +374,9 @@ const ResetPasswordPage = () => {
                 onClick={toggleConfirmPasswordVisibility}
               >
                 {showConfirmPassword ? (
-                  <FaEyeSlash className="h-5 w-5 text-gray-400" />
+                  <FaEyeSlash className="h-5 w-5" style={{ color: colors.textMuted }} />
                 ) : (
-                  <FaEye className="h-5 w-5 text-gray-400" />
+                  <FaEye className="h-5 w-5" style={{ color: colors.textMuted }} />
                 )}
               </button>
             </div>
@@ -341,9 +386,10 @@ const ResetPasswordPage = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                isSubmitting ? 'bg-purple-700' : 'bg-purple-600 hover:bg-purple-700'
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500`}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ 
+                backgroundColor: isSubmitting ? `${colors.primary}80` : colors.primary
+              }}
             >
               {isSubmitting ? 'Resetting Password...' : 'Reset Password'}
             </button>
@@ -353,7 +399,8 @@ const ResetPasswordPage = () => {
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="text-sm text-purple-400 hover:text-purple-300"
+              className="text-sm hover:underline"
+              style={{ color: colors.primary }}
             >
               Back to verification
             </button>
