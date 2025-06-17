@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
 import traceback
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -81,6 +82,68 @@ class RelevanceResponse(BaseModel):
 class BatchRelevanceResponse(BaseModel):
     results: List[Dict[str, Any]]
 
+# Title preprocessing functions
+def preprocess_title(title: str, max_length: int = 200) -> str:
+    """
+    Preprocess a title to handle repetition and excessive length
+    
+    Args:
+        title: The title to preprocess
+        max_length: Maximum length to allow for a title
+        
+    Returns:
+        Preprocessed title
+    """
+    if not title:
+        return ""
+    
+    # Remove newlines and replace with spaces
+    title = re.sub(r'\n+', ' ', title)
+    
+    # Remove excessive whitespace
+    title = re.sub(r'\s+', ' ', title).strip()
+    
+    # Handle repetitive patterns (3 or more repetitions)
+    # This regex finds patterns of 3+ words that repeat
+    repetition_pattern = r'(\b[\w\s]{5,50}\b)(\s+\1){2,}'
+    
+    # Keep checking for repetitions until no more are found
+    prev_title = ""
+    current_title = title
+    
+    while prev_title != current_title:
+        prev_title = current_title
+        
+        # Find repetitive patterns
+        match = re.search(repetition_pattern, current_title, re.IGNORECASE)
+        if match:
+            # Get the repeating pattern
+            pattern = match.group(1)
+            # Replace multiple repetitions with just one instance
+            replacement = pattern
+            # Create a regex that matches 2 or more repetitions of this exact pattern
+            exact_pattern = re.escape(pattern) + r'(\s+' + re.escape(pattern) + r'){1,}'
+            current_title = re.sub(exact_pattern, replacement, current_title, flags=re.IGNORECASE)
+    
+    # Truncate if still too long
+    if len(current_title) > max_length:
+        logger.warning(f"Title too long ({len(title)} chars), truncating to {max_length} chars")
+        current_title = current_title[:max_length] + "..."
+    
+    return current_title
+
+def preprocess_titles(titles: List[str]) -> List[str]:
+    """
+    Preprocess a list of titles
+    
+    Args:
+        titles: List of titles to preprocess
+        
+    Returns:
+        List of preprocessed titles
+    """
+    return [preprocess_title(title) for title in titles]
+
 # Load title examples from JSON file
 GOOD_EXAMPLES = []
 BAD_EXAMPLES = []
@@ -131,6 +194,20 @@ def prepare_examples_for_technology(tech):
 
 def create_batch_prompt(titles, technology):
     """Create a prompt for batch processing of titles"""
+    # Preprocess titles to handle repetition and excessive length
+    processed_titles = preprocess_titles(titles)
+    
+    # Log if any titles were modified
+    for i, (original, processed) in enumerate(zip(titles, processed_titles)):
+        if original != processed:
+            logger.info(f"Title {i+1} preprocessed: {len(original)} chars -> {len(processed)} chars")
+            if len(original) > 100:
+                logger.info(f"Original (truncated): {original[:50]}...{original[-50:]}")
+                logger.info(f"Processed: {processed}")
+            else:
+                logger.info(f"Original: {original}")
+                logger.info(f"Processed: {processed}")
+    
     good_examples, bad_examples = prepare_examples_for_technology(technology)
     
     # Select a subset of examples to keep the prompt size manageable
@@ -203,7 +280,7 @@ For each title, provide:
 4. An array of extracted technologies in the "technologies" field - THIS IS REQUIRED FOR EVERY TITLE
 
 Titles to evaluate:
-{json.dumps(titles, indent=2)}
+{json.dumps(processed_titles, indent=2)}
 
 Respond with a JSON array where each element is an object with "title", "isRelevant", "similarity", "explanation", and "technologies" fields.
 The "technologies" field MUST be included for every title, even if it's an empty array.
@@ -335,6 +412,9 @@ def check_batch_relevance(titles: List[str], technology: str) -> Dict[str, Any]:
     """Check if multiple titles are relevant to a technology using Groq LLM (batch processing)"""
     logger.info(f"Checking batch relevance for {len(titles)} titles with technology: '{technology}'")
     
+    # Preprocess titles to handle repetition and excessive length before any processing
+    titles = preprocess_titles(titles)
+    
     # Send all titles directly to LLM processing
     filtered_titles = titles
     title_to_index = {title: i for i, title in enumerate(titles)}
@@ -349,15 +429,43 @@ def check_batch_relevance(titles: List[str], technology: str) -> Dict[str, Any]:
             prompt = create_batch_prompt(filtered_titles, technology)
             logger.info(f"Created prompt for {len(filtered_titles)} titles")
             
-            # Call Groq API
-            logger.info("Calling Groq API...")
-            api_response = call_groq_api(prompt)
+            # Call Groq API with retries
+            max_retries = 3
+            retry_delay = 2  # seconds
+            api_response = None
             
-            # Check if there was an error in the API call
-            if "error" in api_response:
-                logger.error(f"Error from Groq API: {api_response.get('error')}")
-                # If there was an error, use the rule-based fallback for all filtered titles
-                raise ValueError(f"API error: {api_response.get('error')}")
+            for retry in range(max_retries):
+                try:
+                    logger.info(f"Calling Groq API (attempt {retry+1}/{max_retries})...")
+                    api_response = call_groq_api(prompt)
+                    
+                    # Check if there was an error in the API call
+                    if "error" in api_response:
+                        logger.error(f"Error from Groq API: {api_response.get('error')}")
+                        # If this is the last retry, use fallback
+                        if retry == max_retries - 1:
+                            raise ValueError(f"API error after {max_retries} attempts: {api_response.get('error')}")
+                        # Otherwise wait and retry
+                        logger.info(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    
+                    # If we got a successful response, break out of the retry loop
+                    break
+                except Exception as e:
+                    logger.error(f"Error in API call (attempt {retry+1}/{max_retries}): {e}")
+                    # If this is the last retry, re-raise the exception
+                    if retry == max_retries - 1:
+                        raise
+                    # Otherwise wait and retry
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+            
+            # If we didn't get a response after all retries, use the rule-based fallback
+            if not api_response:
+                raise ValueError("Failed to get API response after all retries")
             
             logger.info(f"Received API response: {json.dumps(api_response, indent=2)[:500]}...")
             

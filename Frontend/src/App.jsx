@@ -19,7 +19,25 @@ import NotFoundPage from './pages/NotFoundPage';
 import { useAuth } from './context/AuthContext';
 import { CustomRoadmapProvider } from './context/CustomRoadmapContext';
 import { ChatbotProvider } from './context/ChatbotContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { useEffect } from 'react';
+import { hasPendingPrompt } from './utils/authRedirectUtils';
+
+// Loading component with enhanced styling
+const LoadingScreen = () => {
+  const { darkMode } = useTheme();
+  
+  const bgColor = darkMode ? '#0F172A' : '#ffffff';
+  const spinnerColor = darkMode ? '#8B5CF6' : '#4F46E5';
+  const textColor = darkMode ? '#F8FAFC' : '#111827';
+  
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen" style={{ backgroundColor: bgColor }}>
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mb-4" style={{ borderColor: spinnerColor }}></div>
+      <p style={{ color: textColor }}>Loading...</p>
+    </div>
+  );
+};
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -28,20 +46,15 @@ const ProtectedRoute = ({ children }) => {
   
   // Show loading state if authentication is being checked
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
   
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
     // Check if we're trying to access the questions page and if we have a pending prompt
-    const pendingLearningTopic = localStorage.getItem('pendingLearningTopic');
     const redirectState = { from: location };
     
-    if (location.pathname === '/questions' && pendingLearningTopic) {
+    if (location.pathname === '/questions' && hasPendingPrompt()) {
       redirectState.hasPendingPrompt = true;
     }
     
@@ -58,11 +71,7 @@ const PublicRoute = ({ children }) => {
   
   // Show loading state if authentication is being checked
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
   
   // Redirect to dashboard if already authenticated
@@ -80,6 +89,11 @@ const OAuthCallback = () => {
   const { loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { darkMode } = useTheme();
+  
+  const bgColor = darkMode ? '#0F172A' : '#ffffff';
+  const spinnerColor = darkMode ? '#8B5CF6' : '#4F46E5';
+  const textColor = darkMode ? '#F8FAFC' : '#111827';
   
   useEffect(() => {
     // Check if there's an error or token in the URL
@@ -98,11 +112,14 @@ const OAuthCallback = () => {
       
       // Wait a moment to ensure token is stored before redirecting
       setTimeout(() => {
-        // Check if there's a pending prompt to process
-        const pendingLearningTopic = localStorage.getItem('pendingLearningTopic');
+        // Check if there's a pending prompt to process using the new service
+        const hasPending = localStorage.getItem('needsValidation') === 'true' && 
+                          !!localStorage.getItem('pendingPromptValidation');
         
-        if (pendingLearningTopic) {
-          navigate('/questions');
+        if (hasPending) {
+          // Always redirect to home first to ensure proper validation flow
+          // The AuthContext will handle validating the prompt and redirecting to questions if valid
+          navigate('/');
         } else {
           navigate('/dashboard');
         }
@@ -115,182 +132,184 @@ const OAuthCallback = () => {
   
   // Show loading spinner while processing
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div>
-      <p className="text-white">Completing authentication...</p>
+    <div className="flex flex-col items-center justify-center min-h-screen" style={{ backgroundColor: bgColor }}>
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mb-4" style={{ borderColor: spinnerColor }}></div>
+      <p style={{ color: textColor }}>Completing authentication...</p>
     </div>
   );
 };
 
 function App() {
   return (
-    <ChatbotProvider>
-      <CustomRoadmapProvider>
-        <Routes>
-          {/* Public routes (accessible only when not logged in) */}
-          <Route 
-            path="/login" 
-            element={
-              <PublicRoute>
-                <LoginPage />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/signup" 
-            element={
-              <PublicRoute>
-                <SignupPage />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/forgot-password" 
-            element={
-              <PublicRoute>
-                <ForgotPasswordPage />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/reset-password" 
-            element={
-              <PublicRoute>
-                <ResetPasswordPage />
-              </PublicRoute>
-            } 
-          />
-          
-          {/* OAuth callback routes */}
-          <Route path="/auth/callback" element={<OAuthCallback />} />
-          
-          {/* Protected routes (require authentication) */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/verify-email" 
-            element={
-              <ProtectedRoute>
-                <EmailVerificationPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/my-roadmaps" 
-            element={
-              <ProtectedRoute>
-                <MyRoadmapsPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Custom Roadmap Routes */}
-          <Route 
-            path="/custom-roadmap" 
-            element={
+    <ThemeProvider>
+      <ChatbotProvider>
+        <CustomRoadmapProvider>
+          <Routes>
+            {/* Public routes (accessible only when not logged in) */}
+            <Route 
+              path="/login" 
+              element={
+                <PublicRoute>
+                  <LoginPage />
+                </PublicRoute>
+              } 
+            />
+            <Route 
+              path="/signup" 
+              element={
+                <PublicRoute>
+                  <SignupPage />
+                </PublicRoute>
+              } 
+            />
+            <Route 
+              path="/forgot-password" 
+              element={
+                <PublicRoute>
+                  <ForgotPasswordPage />
+                </PublicRoute>
+              } 
+            />
+            <Route 
+              path="/reset-password" 
+              element={
+                <PublicRoute>
+                  <ResetPasswordPage />
+                </PublicRoute>
+              } 
+            />
+            
+            {/* OAuth callback routes */}
+            <Route path="/auth/callback" element={<OAuthCallback />} />
+            
+            {/* Protected routes (require authentication) */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/verify-email" 
+              element={
+                <ProtectedRoute>
+                  <EmailVerificationPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/my-roadmaps" 
+              element={
+                <ProtectedRoute>
+                  <MyRoadmapsPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Custom Roadmap Routes */}
+            <Route 
+              path="/custom-roadmap" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <CustomRoadmapPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/custom-roadmap/:id" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <CustomRoadmapPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Two separate roadmap detail routes */}
+            <Route 
+              path="/roadmaps/:id/view" 
+              element={
+                <ProtectedRoute>
+                  <RoadmapResultPage fromSaved={true} />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/roadmaps/:id/resources" 
+              element={
+                <ProtectedRoute>
+                  <RoadmapProgressPage fromSaved={true} />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Legacy route for backward compatibility */}
+            <Route 
+              path="/roadmaps/:id" 
+              element={
+                <ProtectedRoute>
+                  <RoadmapDetailPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* New route for custom roadmaps */}
+            <Route 
+              path="/roadmaps/:id/custom" 
+              element={
+                <ProtectedRoute>
+                  <RoadmapResultPage fromSaved={true} isCustom={true} />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes with MainLayout */}
+            <Route path="/" element={
+              <MainLayout>
+                <HomePage />
+              </MainLayout>
+            } />
+            <Route path="/questions" element={
               <ProtectedRoute>
                 <MainLayout>
-                  <CustomRoadmapPage />
+                  <RoadmapQuestionsPage />
                 </MainLayout>
               </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/custom-roadmap/:id" 
-            element={
+            } />
+            <Route path="/roadmap" element={
               <ProtectedRoute>
                 <MainLayout>
-                  <CustomRoadmapPage />
+                  <RoadmapResultPage />
                 </MainLayout>
               </ProtectedRoute>
-            } 
-          />
-          
-          {/* Two separate roadmap detail routes */}
-          <Route 
-            path="/roadmaps/:id/view" 
-            element={
+            } />
+            <Route path="/test-roadmap" element={
               <ProtectedRoute>
-                <RoadmapResultPage fromSaved={true} />
+                <MainLayout>
+                  <RoadmapTestPage />
+                </MainLayout>
               </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/roadmaps/:id/resources" 
-            element={
+            } />
+            <Route path="/roadmap-progress" element={
               <ProtectedRoute>
-                <RoadmapProgressPage fromSaved={true} />
+                <MainLayout>
+                  <RoadmapProgressPage />
+                </MainLayout>
               </ProtectedRoute>
-            } 
-          />
-          
-          {/* Legacy route for backward compatibility */}
-          <Route 
-            path="/roadmaps/:id" 
-            element={
-              <ProtectedRoute>
-                <RoadmapDetailPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* New route for custom roadmaps */}
-          <Route 
-            path="/roadmaps/:id/custom" 
-            element={
-              <ProtectedRoute>
-                <RoadmapResultPage fromSaved={true} isCustom={true} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Routes with MainLayout */}
-          <Route path="/" element={
-            <MainLayout>
-              <HomePage />
-            </MainLayout>
-          } />
-          <Route path="/questions" element={
-            <ProtectedRoute>
-              <MainLayout>
-                <RoadmapQuestionsPage />
-              </MainLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/roadmap" element={
-            <ProtectedRoute>
-              <MainLayout>
-                <RoadmapResultPage />
-              </MainLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/test-roadmap" element={
-            <ProtectedRoute>
-              <MainLayout>
-                <RoadmapTestPage />
-              </MainLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/roadmap-progress" element={
-            <ProtectedRoute>
-              <MainLayout>
-                <RoadmapProgressPage />
-              </MainLayout>
-            </ProtectedRoute>
-          } />
-          
-          {/* 404 Not Found */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </CustomRoadmapProvider>
-    </ChatbotProvider>
+            } />
+            
+            {/* 404 Not Found */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </CustomRoadmapProvider>
+      </ChatbotProvider>
+    </ThemeProvider>
   );
 }
 

@@ -19,15 +19,20 @@ import random
 import concurrent.futures
 import traceback  # Add traceback for error handling
 from urllib.parse import urlparse, parse_qs
+from typing import Dict, Any
 
 # Import relevance checker for batch processing
 try:
-    from relevance_checker import check_batch_relevance
+    from relevance_checker import check_batch_relevance, preprocess_title
+    HAS_RELEVANCE_CHECKER = True
 except ImportError:
     print("Warning: relevance_checker module not found. Relevance checking will be unavailable.")
+    HAS_RELEVANCE_CHECKER = False
     def check_batch_relevance(titles, query):
         print("Relevance checking unavailable: relevance_checker module not found")
         return None
+    def preprocess_title(title, max_length=200):
+        return title
 
 # Try to import dotenv for .env file support
 try:
@@ -46,8 +51,6 @@ try:
 except ImportError:
     print("Note: Advanced playlist functionality unavailable. Using fallback methods.")
     HAS_CUSTOM_PLAYLIST = False
-
-# Using batch processing with Groq LLM for relevance checking
 
 # ===== UTILITY FUNCTIONS =====
 
@@ -68,6 +71,79 @@ def format_number(num):
             return f"{num/1000000000:.1f}B".replace(".0B", "B")
     except:
         return str(num)
+
+def clean_repeated_title(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Clean repeated titles in data recursively, handling any nested structures"""
+    if not data:
+        return data
+    
+    # Handle dictionary case
+    if isinstance(data, dict):
+        # Clean title if present
+        if "title" in data and isinstance(data["title"], str):
+            # First handle newlines
+            if '\n' in data["title"]:
+                data["title"] = data["title"].split('\n')[0].strip()
+            
+            # Then use the preprocess_title function if available
+            if HAS_RELEVANCE_CHECKER:
+                original_title = data["title"]
+                data["title"] = preprocess_title(data["title"], max_length=200)
+                
+                # Log if title was modified
+                if original_title != data["title"] and len(original_title) > 50:
+                    print(f"Title cleaned: {len(original_title)} chars -> {len(data['title'])} chars")
+                    if len(original_title) > 100:
+                        print(f"Original (truncated): {original_title[:40]}...{original_title[-40:]}")
+                    else:
+                        print(f"Original: {original_title}")
+                    print(f"Cleaned: {data['title']}")
+            else:
+                # Fallback cleaning if preprocess_title is not available
+                # Remove excessive repetition using regex
+                title = data["title"]
+                
+                # Handle repetitive patterns (3 or more repetitions)
+                repetition_pattern = r'(\b[\w\s]{5,50}\b)(\s+\1){2,}'
+                
+                # Keep checking for repetitions until no more are found
+                prev_title = ""
+                current_title = title
+                
+                while prev_title != current_title:
+                    prev_title = current_title
+                    
+                    # Find repetitive patterns
+                    match = re.search(repetition_pattern, current_title, re.IGNORECASE)
+                    if match:
+                        # Get the repeating pattern
+                        pattern = match.group(1)
+                        # Replace multiple repetitions with just one instance
+                        replacement = pattern
+                        # Create a regex that matches 2 or more repetitions of this exact pattern
+                        exact_pattern = re.escape(pattern) + r'(\s+' + re.escape(pattern) + r'){1,}'
+                        current_title = re.sub(exact_pattern, replacement, current_title, flags=re.IGNORECASE)
+                
+                # Truncate if still too long
+                if len(current_title) > 200:
+                    print(f"Title too long ({len(title)} chars), truncating to 200 chars")
+                    current_title = current_title[:200] + "..."
+                
+                data["title"] = current_title
+        
+        # Recursively clean all nested dictionaries and lists
+        for key, value in data.items():
+            if isinstance(value, (dict, list)):
+                data[key] = clean_repeated_title(value)
+                
+    # Handle list case
+    elif isinstance(data, list):
+        # Clean each item in the list
+        for i, item in enumerate(data):
+            if isinstance(item, (dict, list)):
+                data[i] = clean_repeated_title(item)
+    
+    return data
 
 def extract_video_id(url):
     """Extract the video ID from a YouTube URL"""
@@ -1014,12 +1090,53 @@ def check_batch_title_relevance(titles, query):
         if not technology:
             print(f"Using full query for relevance checking: '{query}'")
             technology = query
-            
+        
+        # Preprocess titles to handle repetition and excessive length
+        processed_titles = []
+        for title in titles:
+            if title:
+                # Use preprocess_title if available, otherwise use simple cleaning
+                if HAS_RELEVANCE_CHECKER:
+                    processed_title = preprocess_title(title, max_length=200)
+                else:
+                    # Simple cleaning for fallback
+                    processed_title = title
+                    if '\n' in processed_title:
+                        processed_title = processed_title.split('\n')[0].strip()
+                    # Truncate if too long
+                    if len(processed_title) > 200:
+                        processed_title = processed_title[:200] + "..."
+                
+                processed_titles.append(processed_title)
+            else:
+                processed_titles.append("")
+        
+        # Log title processing results
+        for i, (original, processed) in enumerate(zip(titles, processed_titles)):
+            if original != processed and len(original) > 50:
+                print(f"Title {i+1} preprocessed: {len(original)} chars -> {len(processed)} chars")
+                if len(original) > 100:
+                    print(f"Original (truncated): {original[:40]}...{original[-40:]}")
+                    print(f"Processed: {processed}")
+        
         # Use our relevance checker module for batch processing
-        result = check_batch_relevance(titles, technology)
+        result = check_batch_relevance(processed_titles, technology)
+        
+        # Map results back to original titles
+        if result and 'results' in result:
+            # Create a map of processed titles to original titles
+            title_map = {processed: original for original, processed in zip(titles, processed_titles)}
+            
+            # Update each result with the original title
+            for item in result['results']:
+                processed_title = item.get('title', '')
+                if processed_title in title_map:
+                    item['title'] = title_map[processed_title]
+        
         return result
     except Exception as e:
         print(f"Error checking batch title relevance: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
         return None
 
 def find_best_playlist(query, debug=False, detailed_fetch=False):

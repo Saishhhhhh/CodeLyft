@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HeroAnimation from '../components/HeroAnimation';
 import { generateLearningQuestions, validateAndGenerateQuestions } from '../services/groqService';
+import { hasPendingPrompt, validatePendingPrompt, clearPendingPrompt, storePromptForValidation } from '../utils/authRedirectUtils';
 
 const RoadmapQuestionsPage = () => {
   const [learningTopic, setLearningTopic] = useState('');
@@ -18,46 +19,66 @@ const RoadmapQuestionsPage = () => {
 
   useEffect(() => {
     // Check if we have a pending learning topic from before login
-    const pendingTopic = localStorage.getItem('pendingLearningTopic');
-    
-    if (pendingTopic) {
+    if (hasPendingPrompt()) {
       // Process the pending topic
       const processPendingTopic = async () => {
         setLoading(true);
         try {
-          const result = await validateAndGenerateQuestions(pendingTopic);
+          const validationResult = await validatePendingPrompt();
           
-          if (result.validation.isValid) {
+          if (validationResult.success && validationResult.isValid) {
             // Store extracted topic and questions
-            localStorage.setItem('learningTopic', result.validation.extractedTopic);
-            setLearningTopic(result.validation.extractedTopic);
-            setQuestions(result.questions);
+            localStorage.setItem('learningTopic', validationResult.result.validation.extractedTopic);
+            setLearningTopic(validationResult.result.validation.extractedTopic);
+            setQuestions(validationResult.result.questions);
+          } else if (validationResult.success && !validationResult.isValid) {
+            // If validation fails, redirect back to home but preserve the prompt
+            // Store the prompt again so it's available on the home page
+            if (validationResult.prompt) {
+              storePromptForValidation(validationResult.prompt);
+            }
             
-            // Clear the pending topic as it's now processed
-            localStorage.removeItem('pendingLearningTopic');
+            // Navigate to home with error state
+            navigate('/', { 
+              state: { 
+                validationError: validationResult.result.validation.reason,
+                prompt: validationResult.prompt,
+                preservePrompt: true
+              }
+            });
+            return;
           } else {
-            // If validation fails, we'll still use the raw input
-            localStorage.setItem('learningTopic', pendingTopic);
-            setLearningTopic(pendingTopic);
-            
-            // Generate fallback questions
-            const result = await generateLearningQuestions(pendingTopic);
-            setQuestions(result.questions);
-            
-            // Clear the pending topic
-            localStorage.removeItem('pendingLearningTopic');
+            // If there was an error, use the raw input as fallback
+            if (validationResult.prompt) {
+              localStorage.setItem('learningTopic', validationResult.prompt);
+              setLearningTopic(validationResult.prompt);
+              
+              // Generate fallback questions
+              const result = await generateLearningQuestions(validationResult.prompt);
+              setQuestions(result.questions);
+            } else {
+              // If no prompt is available, redirect to home
+              navigate('/');
+              return;
+            }
           }
         } catch (error) {
           console.error('Error processing pending topic:', error);
-          // Set a generic learning topic and fallback questions
-          setLearningTopic(pendingTopic);
-          setQuestions([
-            `What's your current experience level with ${pendingTopic}?`,
-            `What's your main goal for learning ${pendingTopic}?`,
-            `How much content would you like included in your ${pendingTopic} roadmap?`
-          ]);
-          localStorage.removeItem('pendingLearningTopic');
+          
+          // If there was an error but we still have the prompt, preserve it
+          const pendingPrompt = localStorage.getItem('pendingPromptValidation');
+          if (pendingPrompt) {
+            storePromptForValidation(pendingPrompt);
+          }
+          
+          navigate('/');
+          return;
         } finally {
+          // Only clear pending prompt if validation was successful
+          // Otherwise keep it for the home page
+          if (!navigate.state?.preservePrompt) {
+            clearPendingPrompt();
+          }
           setLoading(false);
         }
       };
@@ -248,28 +269,21 @@ const RoadmapQuestionsPage = () => {
                 </button>
               )}
               
-              <button
-                type="button"
-                onClick={goToNextQuestion}
-                disabled={!answers[`question${currentQuestion + 1}`]?.trim()}
-                className="text-white px-6 py-3 rounded-xl font-medium shadow-md text-base ml-auto"
-                style={{
-                  background: 'linear-gradient(to right, #F97316, #9333EA)',
-                  transition: 'all 0.3s ease',
-                  opacity: !answers[`question${currentQuestion + 1}`]?.trim() ? 0.7 : 1
-                }}
-                onMouseOver={(e) => {
-                  if (answers[`question${currentQuestion + 1}`]?.trim()) {
-                    e.currentTarget.style.background = 'linear-gradient(to right, #EA580C, #7E22CE)';
-                  }
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(to right, #F97316, #9333EA)';
-                }}
-                aria-label={currentQuestion === 2 ? "Generate your personalized roadmap" : "Go to next question"}
-              >
-                {currentQuestion === 2 ? "Generate My Roadmap" : "Next"}
-              </button>
+              <div className="ml-auto">
+                <button
+                  type="button"
+                  onClick={goToNextQuestion}
+                  disabled={!answers[`question${currentQuestion + 1}`]?.trim()}
+                  className={`px-6 py-3 rounded-xl font-medium shadow-sm text-base ${
+                    answers[`question${currentQuestion + 1}`]?.trim()
+                      ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white hover:shadow-lg transform hover:scale-105 transition-all'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                  aria-label={currentQuestion === 2 ? 'Generate roadmap' : 'Go to next question'}
+                >
+                  {currentQuestion === 2 ? 'Generate Roadmap' : 'Next'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

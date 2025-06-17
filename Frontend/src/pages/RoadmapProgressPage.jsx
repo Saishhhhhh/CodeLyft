@@ -1172,16 +1172,16 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
       )}
 
       {/* Notes Modal */}
-      <NotesModal 
+        <NotesModal
         isOpen={noteModalOpen}
-        onClose={closeNoteModal}
-        onSave={saveNote}
-        onDelete={deleteNote}
-        note={currentNote}
-        onNoteChange={setCurrentNote}
-        videoTitle={currentVideo?.title}
-        lastEdited={editingNote ? noteTimestamps[editingNote] : null}
-      />
+          onClose={closeNoteModal}
+          onSave={saveNote}
+          onDelete={deleteNote}
+          note={currentNote}
+          onNoteChange={setCurrentNote}
+          videoTitle={currentVideo?.title}
+          lastEdited={editingNote ? noteTimestamps[editingNote] : null}
+        />
       
       {/* Celebration Modal */}
       <CelebrationModal 

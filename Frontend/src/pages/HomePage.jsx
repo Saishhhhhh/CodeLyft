@@ -1,183 +1,297 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import HeroAnimation from '../components/HeroAnimation';
-import { validateAndGenerateQuestions } from '../services/groqService';
+import { useTheme } from '../context/ThemeContext';
+import { useEffect, useState, useRef } from 'react';
+import HeroSection from '../components/home/HeroSection';
+import CtaSection from '../components/home/CtaSection';
+import Footer from '../components/home/Footer';
+import {
+  PersonalizedRoadmapSection,
+  YoutubeResourcesSection,
+  ProgressTrackingSection,
+  CustomRoadmapSection,
+  AnimationWrapper
+} from '../components/home/ScrollSections';
+import ProcessSection from '../components/home/ProcessSection';
 
 const HomePage = () => {
-  const [learningTopic, setLearningTopic] = useState('');
-  const [error, setError] = useState(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const navigate = useNavigate();
+  const { darkMode } = useTheme();
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const backgroundRef = useRef(null);
+  const canvasRef = useRef(null);
+  const dotsRef = useRef([]);
+  const requestRef = useRef();
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const sectionRefs = useRef([]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setIsValidating(true);
+  // Define colors based on theme - Using the provided color palette
+  const colors = {
+    // Primary and accent colors
+    primary: darkMode ? '#4F46E5' : '#4F46E5', // Indigo - main brand color
+    secondary: darkMode ? '#DA2C38' : '#DA2C38', // YouTube Red - accent color
+    accent: darkMode ? '#8B5CF6' : '#8B5CF6', // Purple - complementary accent
+    
+    // Background colors
+    background: darkMode ? '#111827' : '#F9F9F9', // Dark Gray / Light Gray
+    cardBg: darkMode ? '#1E293B' : '#FFFFFF', // Darker background / White
+    
+    // Text colors
+    text: darkMode ? '#F9F9F9' : '#111827', // Light Gray / Dark Gray
+    textMuted: darkMode ? '#94A3B8' : '#6B7280', // Light gray / Medium gray
+    
+    // UI elements
+    border: darkMode ? '#334155' : '#E5E7EB', // Medium-dark gray / Light gray
+    codeBg: darkMode ? '#0F172A' : '#F3F4F6', // Dark blue-black / Light gray
+    codeText: darkMode ? '#4F46E5' : '#4F46E5', // Indigo for consistency
+    shadow: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)', // Shadows
+  };
 
-    // Save the raw input to localStorage so we can retrieve it after login
-    localStorage.setItem('pendingLearningTopic', learningTopic);
+  // Initialize interactive dots
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    
+    const updateDimensions = () => {
+      if (!canvasRef.current) return;
+      const { width, height } = canvasRef.current.getBoundingClientRect();
+      setDimensions({ width, height });
+      
+      const canvas = canvasRef.current;
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Initialize dots
+      const dotSpacing = 40;
+      const dots = [];
+      
+      for (let x = 0; x < width; x += dotSpacing) {
+        for (let y = 0; y < height; y += dotSpacing) {
+          // Add some randomness to dot positions
+          const offsetX = Math.random() * 10 - 5;
+          const offsetY = Math.random() * 10 - 5;
+          
+          dots.push({
+            x: x + offsetX,
+            y: y + offsetY,
+            originalX: x + offsetX,
+            originalY: y + offsetY,
+            size: 2,
+            color: Math.random() > 0.5 ? 
+              darkMode ? `${colors.primary}60` : `${colors.primary}80` : 
+              darkMode ? `${colors.secondary}60` : `${colors.secondary}80`,
+            speedFactor: 0.8 + Math.random() * 0.4 // Random speed variation
+          });
+        }
+      }
+      
+      dotsRef.current = dots;
+      renderDots();
+    };
+    
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+      cancelAnimationFrame(requestRef.current);
+    };
+  }, [darkMode, colors.primary, colors.secondary]);
 
-    try {
-      // Start the timer
-      const startTime = performance.now();
+  // Handle mouse movement
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!backgroundRef.current) return;
       
-      const result = await validateAndGenerateQuestions(learningTopic);
+      const { clientX, clientY } = e;
+      const { innerWidth, innerHeight } = window;
       
-      // End the timer and log the duration
-      const endTime = performance.now();
-      console.log(`Combined validation and question generation took ${(endTime - startTime).toFixed(2)} ms`);
+      // Calculate normalized mouse position (-1 to 1)
+      const normalizedX = (clientX / innerWidth) * 2 - 1;
+      const normalizedY = (clientY / innerHeight) * 2 - 1;
       
-      if (!result.validation.isValid) {
-        setError({
-          message: result.validation.reason,
-          example: result.validation.example
-        });
-        setIsValidating(false);
+      // Get position relative to the canvas
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const x = rect ? clientX - rect.left : clientX;
+      const y = rect ? clientY - rect.top : clientY;
+      
+      setMousePosition({ x: normalizedX, y: normalizedY, canvasX: x, canvasY: y });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Animate dots based on mouse position
+  useEffect(() => {
+    const animateDots = () => {
+      if (!dotsRef.current.length || !mousePosition.canvasX) {
+        requestRef.current = requestAnimationFrame(animateDots);
         return;
       }
-
-      // Store both the extracted learning topic and questions in localStorage
-      localStorage.setItem('learningTopic', result.validation.extractedTopic);
-      localStorage.setItem('preGeneratedQuestions', JSON.stringify(result.questions));
       
-      // Navigate to the questions page
-      navigate('/questions');
-    } catch (error) {
-      setError({
-        message: 'Failed to validate your input. Please try again.',
-        example: 'Try entering a specific technology like "React" or "Python"'
+      const { canvasX, canvasY } = mousePosition;
+      const interactionRadius = 100; // How far the mouse influence reaches
+      const maxDistance = 20; // Maximum distance a dot can move
+      
+      dotsRef.current.forEach(dot => {
+        const dx = canvasX - dot.originalX;
+        const dy = canvasY - dot.originalY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < interactionRadius) {
+          // Calculate repulsion strength (stronger when closer)
+          const strength = (interactionRadius - distance) / interactionRadius;
+          
+          // Calculate repulsion direction (away from mouse)
+          const angle = Math.atan2(dy, dx);
+          
+          // Apply repulsion
+          const repulsionX = Math.cos(angle) * maxDistance * strength * dot.speedFactor;
+          const repulsionY = Math.sin(angle) * maxDistance * strength * dot.speedFactor;
+          
+          dot.x = dot.originalX - repulsionX;
+          dot.y = dot.originalY - repulsionY;
+        } else {
+          // Return to original position with easing
+          dot.x += (dot.originalX - dot.x) * 0.1;
+          dot.y += (dot.originalY - dot.y) * 0.1;
+        }
       });
-    } finally {
-      setIsValidating(false);
-    }
+      
+      renderDots();
+      requestRef.current = requestAnimationFrame(animateDots);
+    };
+    
+    animateDots();
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [mousePosition]);
+
+  // Render dots on canvas
+  const renderDots = () => {
+    if (!canvasRef.current || !dotsRef.current.length) return;
+    
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.clearRect(0, 0, dimensions.width, dimensions.height);
+    
+    dotsRef.current.forEach(dot => {
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
+      ctx.fillStyle = dot.color;
+      ctx.fill();
+    });
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(to bottom, #FFF7ED, #FFFFFF)' }}>
-      {/* Animation Background */}
-      <HeroAnimation />
-      
-      {/* Hero Section */}
-      <div className="max-w-7xl mx-auto px-4 pt-20 pb-16">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 font-poppins" style={{
-            background: 'linear-gradient(to right, #EA580C, #9333EA)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
-            Learn Anything for Free. Structured. Smart.
-          </h1>
-          
-          <p className="text-xl md:text-2xl text-gray-700 mb-10 font-mukta">
-            Get personalized learning paths and the best YouTube resources based on what you want to learn.
-          </p>
+    <div className="min-h-screen transition-colors duration-300 relative overflow-hidden" style={{ 
+      backgroundColor: colors.background
+    }}>
+      {/* Global Background Elements */}
+      <div ref={backgroundRef} className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        {/* Solid background color overlay */}
+        <div 
+          className="absolute inset-0"
+          style={{ 
+            backgroundColor: darkMode ? '#4F46E510' : '#4F46E508',
+            opacity: 1,
+            transform: `translate(${mousePosition.x * -5}px, ${mousePosition.y * -5}px)`,
+            transition: 'transform 0.6s cubic-bezier(0.33, 1, 0.68, 1)'
+          }}
+        />
 
-          {/* Search Box */}
-          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto mb-16">
-            <div className="flex flex-col items-center">
-              <textarea
-                value={learningTopic}
-                onChange={(e) => {
-                  setLearningTopic(e.target.value);
-                  setError(null);
-                }}
-                placeholder="What do you want to learn? (e.g., MERN stack, DevOps, React, or be more specific about your goals...)"
-                className={`w-full p-6 rounded-xl border-2 focus:outline-none shadow-lg text-lg font-mukta resize-none mb-4 ${
-                  error ? 'border-red-500' : 'border-orange-200 focus:border-orange-400'
-                }`}
-                rows={4}
-                required
-              />
-              {error && (
-                <div className="w-full mb-4 p-6 bg-red-50 border border-red-200 rounded-xl text-left">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-lg font-medium text-red-800 font-poppins mb-2">
-                        Invalid Learning Topic
-                      </h3>
-                      <p className="text-red-600 font-mukta mb-3">
-                        {error.message}
-                      </p>
-                      <div className="bg-white p-4 rounded-lg border border-red-100">
-                        <p className="text-gray-700 font-mukta mb-2">
-                          <span className="font-semibold">Try this instead:</span>
-                        </p>
-                        <p className="text-gray-600 font-mukta">
-                          {error.example}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <button
-                type="submit"
-                disabled={isValidating}
-                className={`text-white px-8 py-3 rounded-xl font-medium shadow-md text-lg ${
-                  isValidating ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-                style={{
-                  background: 'linear-gradient(to right, #F97316, #9333EA)',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseOver={(e) => {
-                  if (!isValidating) {
-                    e.currentTarget.style.background = 'linear-gradient(to right, #EA580C, #7E22CE)';
-                  }
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(to right, #F97316, #9333EA)';
-                }}
-              >
-                {isValidating ? 'Validating...' : 'Generate My Roadmap'}
-              </button>
-            </div>
-          </form>
+        {/* Interactive dot grid overlay */}
+        <canvas 
+          ref={canvasRef} 
+          className="absolute inset-0 w-full h-full"
+          style={{
+            opacity: darkMode ? 0.4 : 0.5,
+          }}
+        />
 
-          {/* Features Preview */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20">
-            {/* First feature card */}
-            <div className="bg-white p-6 rounded-xl shadow-md transition-all duration-300 hover:shadow-xl">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'rgba(249, 115, 22, 0.1)' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#F97316">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2 text-center font-poppins">Personalized Roadmaps</h3>
-              <p className="text-gray-600 text-center font-mukta">Custom learning paths tailored to your experience level and goals</p>
-            </div>
-            
-            {/* Second feature card */}
-            <div className="bg-white p-6 rounded-xl shadow-md transition-all duration-300 hover:shadow-xl">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'rgba(147, 51, 234, 0.1)' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#9333EA">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2 text-center font-poppins">Curated YouTube Content</h3>
-              <p className="text-gray-600 text-center font-mukta">The best free videos and playlists, organized for optimal learning</p>
-            </div>
-            
-            {/* Third feature card */}
-            <div className="bg-white p-6 rounded-xl shadow-md transition-all duration-300 hover:shadow-xl">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'rgba(22, 163, 74, 0.1)' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#16A34A">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2 text-center font-poppins">Progress Tracking</h3>
-              <p className="text-gray-600 text-center font-mukta">Track your learning journey with intuitive checklists and milestones</p>
-            </div>
+        {/* Decorative shapes */}
+        <div className="hidden sm:block absolute -top-20 -right-20 w-96 h-96 rounded-full" style={{
+          background: `radial-gradient(circle, ${darkMode ? `${colors.primary}20` : `${colors.primary}30`} 0%, ${darkMode ? `${colors.primary}05` : `${colors.primary}10`} 50%, transparent 70%)`,
+          filter: darkMode ? 'blur(25px)' : 'blur(20px)',
+          animation: darkMode ? 'float 15s ease-in-out infinite' : 'none',
+          transform: `translate(${mousePosition.x * 15}px, ${mousePosition.y * 15}px)`,
+          transition: 'transform 0.5s cubic-bezier(0.33, 1, 0.68, 1)'
+        }}/>
+
+        <div className="hidden sm:block absolute bottom-1/4 -left-20 w-80 h-80 rounded-full" style={{
+          background: `radial-gradient(circle, ${darkMode ? `${colors.secondary}20` : `${colors.secondary}30`} 0%, ${darkMode ? `${colors.secondary}05` : `${colors.secondary}10`} 50%, transparent 70%)`,
+          filter: darkMode ? 'blur(25px)' : 'blur(20px)',
+          animation: darkMode ? 'float 18s ease-in-out infinite reverse' : 'none',
+          transform: `translate(${mousePosition.x * 20}px, ${mousePosition.y * 10}px)`,
+          transition: 'transform 0.7s cubic-bezier(0.33, 1, 0.68, 1)'
+        }}/>
+
+        <div className="hidden lg:block absolute top-1/3 right-1/4 w-64 h-64 rounded-full" style={{
+          background: `radial-gradient(circle, ${darkMode ? `${colors.accent}15` : `${colors.accent}20`} 0%, ${darkMode ? `${colors.accent}03` : `${colors.accent}05`} 50%, transparent 70%)`,
+          filter: darkMode ? 'blur(30px)' : 'blur(25px)',
+          animation: darkMode ? 'float 20s ease-in-out infinite' : 'none',
+          transform: `translate(${mousePosition.x * -15}px, ${mousePosition.y * 12}px)`,
+          transition: 'transform 0.9s cubic-bezier(0.33, 1, 0.68, 1)'
+        }}/>
+
+        {/* Add CSS keyframes for the animations */}
+        <style jsx>{`
+          @keyframes float {
+            0% { transform: translateY(0px) }
+            50% { transform: translateY(-10px) }
+            100% { transform: translateY(0px) }
+          }
+        `}</style>
+      </div>
+
+      {/* Content - Optimized for smooth scrolling */}
+      <div className="relative z-10">
+        {/* Hero Section - Full Screen */}
+        <section className="full-screen-section min-h-[90vh] flex items-center">
+          <HeroSection colors={colors} darkMode={darkMode} />
+        </section>
+        
+        {/* Scroll Sections - Each Full Screen */}
+        <section className="full-screen-section min-h-[100vh] md:min-h-screen py-16 md:py-0 flex items-center">
+          <div className="w-full">
+            <PersonalizedRoadmapSection colors={colors} />
           </div>
+        </section>
+        
+        <section className="full-screen-section min-h-[100vh] md:min-h-screen py-16 md:py-0 flex items-center">
+          <div className="w-full">
+            <YoutubeResourcesSection colors={colors} />
+          </div>
+        </section>
+        
+        <section className="full-screen-section min-h-[100vh] md:min-h-screen py-16 md:py-0 flex items-center">
+          <div className="w-full">
+            <ProgressTrackingSection colors={colors} />
+          </div>
+        </section>
+        
+        <section className="full-screen-section min-h-[100vh] md:min-h-screen py-16 md:py-0 flex items-center">
+          <div className="w-full">
+            <CustomRoadmapSection colors={colors} />
+          </div>
+        </section>
+        
+        {/* Process Section with Tech Stack */}
+        <section className="py-12 md:py-16">
+          <div className="w-full">
+            <ProcessSection colors={colors} darkMode={darkMode} />
+          </div>
+        </section>
+        
+        {/* CTA and Footer section - Fixed to bottom */}
+        <section className="mt-auto">
+          <div className="w-full">
+            <CtaSection colors={colors} />
+          </div>
+        </section>
+        
+        {/* Footer in its own section to ensure it's at the bottom */}
+        <div className="w-full mt-auto">
+          <Footer colors={colors} darkMode={darkMode} />
         </div>
       </div>
     </div>
   );
 };
 
-export default HomePage; 
+export default HomePage;

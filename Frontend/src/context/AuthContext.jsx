@@ -8,6 +8,12 @@ import {
   loginWithGoogle,
   loginWithGithub
 } from '../services/authService';
+import { 
+  hasPendingPrompt, 
+  validatePendingPrompt, 
+  clearPendingPrompt,
+  storePromptForValidation
+} from '../utils/authRedirectUtils';
 
 // Create auth context
 const AuthContext = createContext();
@@ -19,6 +25,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [pendingValidation, setPendingValidation] = useState(null);
 
   // Load user on initial render if token exists or if redirected from OAuth
   useEffect(() => {
@@ -31,15 +38,31 @@ export const AuthProvider = ({ children }) => {
           const response = await getCurrentUser();
           if (response.success && response.data) {
             setUser(response.data);
+            
+            // Check if there's a pending prompt to validate
+            if (hasPendingPrompt()) {
+              const validationResult = await validatePendingPrompt();
+              
+              // Store the validation result regardless of whether it's valid or not
+              // This allows us to handle both valid and invalid prompts appropriately
+              setPendingValidation(validationResult);
+              
+              // If validation failed, make sure the prompt is preserved
+              if (validationResult && !validationResult.isValid && validationResult.prompt) {
+                storePromptForValidation(validationResult.prompt);
+              }
+            }
           } else {
             // Clear invalid token
             localStorage.removeItem('token');
+            // Don't clear pending prompt here - we want to preserve it even if auth fails
           }
         }
       } catch (err) {
         console.error('Failed to load user:', err.message);
         // Clear invalid token
         localStorage.removeItem('token');
+        // Don't clear pending prompt here
       } finally {
         setLoading(false);
       }
@@ -90,6 +113,18 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await loginUser(credentials);
       setUser(response.user);
+      
+      // Check if there's a pending prompt to validate
+      if (hasPendingPrompt()) {
+        const validationResult = await validatePendingPrompt();
+        setPendingValidation(validationResult);
+        
+        // If validation failed, make sure the prompt is preserved
+        if (validationResult && !validationResult.isValid && validationResult.prompt) {
+          storePromptForValidation(validationResult.prompt);
+        }
+      }
+      
       return response;
     } catch (err) {
       setError(err.message);
@@ -109,6 +144,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await logoutUser();
       setUser(null);
+      clearPendingPrompt();
     } catch (err) {
       setError(err.message);
       throw err;
@@ -133,12 +169,21 @@ export const AuthProvider = ({ children }) => {
     loginWithGithub();
   };
 
+  /**
+   * Clear pending validation state
+   */
+  const clearPendingValidation = () => {
+    setPendingValidation(null);
+  };
+
   // Context value
   const value = {
     user,
     loading,
     error,
     isAuthenticated: !!user,
+    pendingValidation,
+    clearPendingValidation,
     register,
     login,
     logout,

@@ -1,0 +1,232 @@
+/* Global styles */
+
+/* Placeholder styling */
+.placeholder-input::placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+/* For Firefox */
+.placeholder-input::-moz-placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+/* For Internet Explorer */
+.placeholder-input:-ms-input-placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+/* For Edge */
+.placeholder-input::-ms-input-placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+/* For Chrome, Safari, and Opera */
+.placeholder-input::-webkit-input-placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+/* Button with corner fill effect */
+.corner-fill-btn {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.corner-fill-btn::before {
+  content: '';
+  position: absolute;
+  bottom: -50%;
+  right: -50%;
+  width: 0;
+  height: 0;
+  background-color: var(--btn-bg-color, #8B5CF6);
+  z-index: -1;
+  transform: scale(0);
+  transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+}
+
+.corner-fill-btn:hover {
+  color: white !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.corner-fill-btn:hover::before {
+  width: 300%;
+  height: 300%;
+  transform: scale(1);
+  border-radius: 0;
+}
+
+.corner-fill-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* Full screen sections */
+html {
+  scroll-behavior: auto;
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+.full-screen-section {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .full-screen-section {
+    min-height: auto;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+  
+  h1, h2 {
+    word-break: break-word;
+    hyphens: auto;
+  }
+  
+  .animate-on-scroll {
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+}
+
+/* Basic scroll animations */
+.animate-on-scroll {
+  opacity: 0;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+/* Initial states - where elements start from and return to when not visible */
+.fade-up {
+  transform: translateY(30px);
+}
+
+.fade-down {
+  transform: translateY(-30px);
+}
+
+.fade-left {
+  transform: translateX(-30px);
+}
+
+.fade-right {
+  transform: translateX(30px);
+}
+
+/* Animated state - where elements animate to when visible */
+.animated {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* Animation delays */
+.delay-100 {
+  transition-delay: 100ms;
+}
+
+.delay-200 {
+  transition-delay: 200ms;
+}
+
+.delay-300 {
+  transition-delay: 300ms;
+}
+
+.delay-400 {
+  transition-delay: 400ms;
+}
+
+.delay-500 {
+  transition-delay: 500ms;
+}
+
+/* Animations */
+@keyframes gradientBg {
+  0% { background-position: 0% 50% }
+  50% { background-position: 100% 50% }
+  100% { background-position: 0% 50% }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) }
+  50% { transform: translateY(-10px) }
+  100% { transform: translateY(0px) }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-animation {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Parallax scroll animations */
+.parallax-element {
+  will-change: transform, opacity;
+  transition: transform 0.1s linear, opacity 0.1s linear;
+}
+
+.parallax-left {
+  transform: translateX(-100px);
+  opacity: 0;
+}
+
+.parallax-right {
+  transform: translateX(100px);
+  opacity: 0;
+}
+
+.parallax-bottom {
+  transform: translateY(100px);
+  opacity: 0;
+}
+
+.parallax-top {
+  transform: translateY(-100px);
+  opacity: 0;
+}
+
+.parallax-fade {
+  opacity: 0;
+}
+
+@keyframes flowText {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-flow-text {
+  animation: flowText 12s linear infinite;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}

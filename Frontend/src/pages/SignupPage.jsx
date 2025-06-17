@@ -102,8 +102,8 @@ const SignupPage = () => {
       
       await register(userData);
       
-      // Navigate to email verification page
-      navigate('/verify-email');
+      // Redirect to home page after successful registration
+      navigate('/');
     } catch (err) {
       // Error is handled by AuthContext
       console.error('Registration error:', err);
