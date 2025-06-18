@@ -123,37 +123,54 @@ export const ChatbotProvider = ({ children }) => {
   }, [currentRoadmap, currentTopic, userProgress]);
 
   // Send a message to the chatbot
-  const sendMessage = async (userMessage) => {
+  const sendMessage = async (userMessage, customMessages = null, callback = null, skipUpdatingGlobalChat = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Add user message to the chat
-      const newUserMessage = { role: 'user', content: userMessage };
-      const updatedMessages = [...messages, newUserMessage];
-      setMessages(updatedMessages);
-      
-      // Prepare messages for API call (include system message and context)
-      const contextString = getContextString();
-      const systemMessageWithContext = {
-        ...SYSTEM_MESSAGE,
-        content: contextString ? `${SYSTEM_MESSAGE.content}\n\n${contextString}` : SYSTEM_MESSAGE.content
-      };
-      
-      const apiMessages = [systemMessageWithContext, ...updatedMessages];
+      // If not using custom messages, use the global chat history
+      if (!customMessages) {
+        // Add user message to the chat
+        const newUserMessage = { role: 'user', content: userMessage };
+        const updatedMessages = [...messages, newUserMessage];
+        
+        // Only update global messages if not skipping
+        if (!skipUpdatingGlobalChat) {
+          setMessages(updatedMessages);
+        }
+        
+        // Prepare messages for API call (include system message and context)
+        const contextString = getContextString();
+        const systemMessageWithContext = {
+          ...SYSTEM_MESSAGE,
+          content: contextString ? `${SYSTEM_MESSAGE.content}\n\n${contextString}` : SYSTEM_MESSAGE.content
+        };
+        
+        customMessages = [systemMessageWithContext, ...updatedMessages];
+      }
       
       // Call the API
-      const response = await togetherService.createChatCompletion(apiMessages);
+      const response = await togetherService.createChatCompletion(customMessages);
       
       // Extract the assistant's response
       const assistantMessage = response.choices[0].message;
       
-      // Add assistant message to chat
-      setMessages([...updatedMessages, assistantMessage]);
+      // Add assistant message to chat if not skipping global updates
+      if (!skipUpdatingGlobalChat) {
+        setMessages(prev => [...prev, assistantMessage]);
+      }
+      
+      // If callback provided, call it with the response
+      if (callback && typeof callback === 'function') {
+        callback(response);
+      }
+      
+      return response;
       
     } catch (err) {
       console.error('Error sending message:', err);
       setError(err.message || 'Failed to get response');
+      throw err;
     } finally {
       setIsLoading(false);
     }

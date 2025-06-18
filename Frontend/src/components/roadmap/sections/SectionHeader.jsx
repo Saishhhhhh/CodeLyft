@@ -10,6 +10,7 @@ import React from 'react';
  * @param {number} props.completionPercentage - Percentage of completion
  * @param {boolean} props.isExpanded - Whether the section is expanded
  * @param {Function} props.onToggle - Function to toggle section expansion
+ * @param {Object} props.theme - Theme object with color values
  */
 const SectionHeader = ({
   title,
@@ -18,45 +19,50 @@ const SectionHeader = ({
   totalCount,
   completionPercentage,
   isExpanded,
-  onToggle
+  onToggle,
+  theme
 }) => {
   return (
     <div 
-      className="bg-gradient-to-r from-orange-50 to-purple-50 p-4 cursor-pointer hover:bg-gradient-to-r hover:from-orange-100 hover:to-purple-100 transition-colors"
+      className="p-4 cursor-pointer transition-colors"
+      style={{
+        backgroundColor: theme.cardBg,
+        borderBottom: `1px solid ${theme.border}`
+      }}
       onClick={onToggle}
     >
       <div className="flex flex-col">
         <div className="flex items-start justify-between mb-2">
-          <h2 className="text-xl font-semibold">
+          <h2 className="text-xl font-semibold flex-1 pr-4" style={{ color: theme.text }}>
             {title}
           </h2>
-          <div className="flex items-center space-x-3 mt-1">
-            <div className="flex flex-col items-end">
-              <span className="text-base text-gray-700">
+          <div className="flex items-center space-x-3 mt-1 flex-shrink-0">
+            <div className="flex flex-col items-end min-w-[80px]">
+              <span className="text-base whitespace-nowrap" style={{ color: theme.text }}>
                 {completedCount} / {totalCount}
               </span>
-              <span className="text-xs text-gray-600 -mt-0.5">
+              <span className="text-xs -mt-0.5 whitespace-nowrap" style={{ color: theme.textMuted }}>
                 {completionPercentage}% Complete
               </span>
             </div>
             <svg 
-              className={`w-4 h-4 text-gray-500 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+              className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
               fill="none" 
-              stroke="currentColor" 
+              stroke={theme.text}
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
         </div>
-        <p className="text-sm text-gray-600 mb-4">
-          {description}
-        </p>
         {/* Progress Bar - Always visible */}
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: theme.progressBg }}>
           <div 
-            className="h-full bg-gradient-to-r from-orange-500 to-purple-500 transition-all duration-500"
-            style={{ width: `${completionPercentage}%` }}
+            className="h-full transition-all duration-500"
+            style={{ 
+              width: `${completionPercentage}%`,
+              backgroundColor: theme.progressFill
+            }}
           />
         </div>
       </div>

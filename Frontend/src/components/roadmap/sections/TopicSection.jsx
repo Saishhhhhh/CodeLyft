@@ -1,309 +1,172 @@
-import React, { useState, useEffect } from 'react';
-import VideoCard from '../common/VideoCard';
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { decodeUnicode, formatDuration } from '../utils/videoUtils';
-import { fetchRealDurations } from '../../../services/youtubeService';
 
-// Helper function to extract YouTube ID from URL
-const extractYouTubeId = (url) => {
-  if (!url) return null;
-  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-  return match ? match[1] : null;
-};
-
-// Helper function to ensure video has an ID
-const ensureVideoId = (video) => {
-  if (!video.id) {
-    // Try to extract ID from URL
-    const youtubeId = extractYouTubeId(video.url);
-    if (youtubeId) {
-      video.id = youtubeId;
-      video.youtubeId = youtubeId;
-    } else {
-      // Generate a fallback ID using title or URL
-      video.id = `video-${video.url ? video.url.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '-') : Math.random().toString(36).substring(2, 10)}`;
-    }
-  }
-  return video;
-};
-
-// Helper function to process duration for playlist videos
-const processDuration = (duration) => {
-  if (!duration) return '0:00';
-  
-  // If duration is very short (likely a placeholder)
-  if (typeof duration === 'string' && 
-      (duration === '0:01' || duration === '0:00' || duration === '00:01' || duration === '00:00')) {
-    // For playlist videos, we might not have accurate duration data yet
-    return 'Loading...';
-  }
-  
-  return formatDuration(duration);
-};
-
-/**
- * TopicSection component for displaying a topic and its videos
- * @param {Object} props
- * @param {Object} props.topic - Topic object containing video information
- * @param {Object} props.completedVideos - Object mapping video IDs to completion status
- * @param {Object} props.videoNotes - Object mapping video IDs to notes
- * @param {Object} props.noteTimestamps - Object mapping video IDs to note timestamps
- * @param {Function} props.onToggleVideoComplete - Function to toggle video completion
- * @param {Function} props.onPlayVideo - Function to play a video
- * @param {Function} props.onAddNote - Function to add/edit notes
- * @param {Function} props.onPlaylistClick - Function to handle playlist navigation
- */
 const TopicSection = ({
   topic,
   completedVideos = {},
   videoNotes = {},
-  noteTimestamps = {},
-  onToggleVideoComplete,
+  onToggleComplete,
   onPlayVideo,
   onAddNote,
-  onPlaylistClick
+  theme
 }) => {
-  const [videos, setVideos] = useState([]);
-  const [isLoadingDurations, setIsLoadingDurations] = useState(false);
-
-  useEffect(() => {
-    // Initialize videos from topic
-    if (topic?.video?.videos) {
-      const processedVideos = topic.video.videos.map(ensureVideoId);
-      setVideos(processedVideos);
-      
-      // Check if we need to fetch real durations
-      const hasPlaceholderDurations = processedVideos.some(video => 
-        ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration) || 
-        ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration_seconds)
-      );
-      
-      // Also check for very short durations that are likely placeholders
-      const hasShortDurations = processedVideos.some(video => {
-        // Check if duration is a number and very small
-        if (typeof video.duration_seconds === 'number' && video.duration_seconds < 60) {
-          return true;
-        }
-        
-        // Check if duration is a string representing a short time
-        if (typeof video.duration === 'string') {
-          const parts = video.duration.split(':').map(part => parseInt(part) || 0);
-          if (parts.length === 2 && parts[0] === 0 && parts[1] < 30) {
-            return true;
-          }
-        }
-        
-        return false;
-      });
-      
-      if (hasPlaceholderDurations || hasShortDurations) {
-        fetchDurations(processedVideos);
-      }
-    }
-  }, [topic]);
-  
-  const fetchDurations = async (videosToUpdate) => {
-    try {
-      setIsLoadingDurations(true);
-      const updatedVideos = await fetchRealDurations(videosToUpdate);
-      setVideos(updatedVideos);
-    } catch (error) {
-      console.error('Error fetching real durations:', error);
-    } finally {
-      setIsLoadingDurations(false);
-    }
-  };
-
   if (!topic?.video) return null;
 
-  // Check if this is a playlist (has multiple videos)
-  const isPlaylist = videos && videos.length > 1;
-  const videoCount = videos?.length || 0;
-  const firstVideo = videos?.[0];
+  const videos = topic.video.videos || [];
+  const [openMenuIdx, setOpenMenuIdx] = useState(null);
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+  const menuRefs = useRef([]);
 
-  const handleThumbnailClick = (e) => {
-    e.preventDefault();
-    // Try to get the URL from topic.video.url or from the first video if available
-    const playlistUrl = topic.video.url || (videos && videos.length > 0 ? videos[0].url : null);
-    if (playlistUrl) {
-      onPlaylistClick(playlistUrl);
+  // Only play video if click is not on menu or menu button
+  const handleCardClick = (e, video, idx) => {
+    if (
+      menuRefs.current[idx] &&
+      (menuRefs.current[idx].contains(e.target) || e.target.closest('.topic-menu-btn'))
+    ) {
+      return;
     }
+    onPlayVideo(video);
   };
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  // Animation variants for video items - modified to prevent scroll issues
+  const videoItemVariants = {
+    hidden: { opacity: 0, scale: 0.98 },
+    visible: i => ({
+      opacity: 1,
+      scale: 1,
+      transition: {
+        delay: i * 0.05, // Reduced delay to minimize animation duration
+        duration: 0.25, // Shorter duration
+        ease: "easeOut"
+      }
+    })
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="mb-6 flex justify-between items-start">
-        <div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">
-            {decodeUnicode(topic.video.title)}
-          </h3>
-          <div className="flex items-center space-x-2 text-gray-600">
-            <span>By: {
-              // Try all possible locations for channel name
-              (typeof topic.video.channel === 'string' ? topic.video.channel : 
-               typeof topic.video.channel === 'object' && topic.video.channel?.name ? topic.video.channel.name :
-               typeof videos?.[0]?.channel === 'string' ? videos[0].channel : 
-               videos?.[0]?.channel?.name) || 
-              "Unknown"
-            }</span>
-            {isPlaylist && (
-              <span 
-                className="text-sm px-2 py-0.5 rounded-full font-medium text-white"
-                style={{
-                  background: 'linear-gradient(to right, #EA580C, #9333EA)',
+    <div className="w-full overflow-visible">
+      {/* Videos List */}
+      <div className="w-full overflow-visible">
+        {videos.map((video, idx) => {
+          const isCompleted = completedVideos[video.id || video._id];
+          const menuOpen = openMenuIdx === idx;
+          const isHovered = hoveredIdx === idx;
+          // Use a subtle accent color with opacity for the border
+          const subtleAccent = `${theme.accent}99`; // ~60% opacity
+          return (
+            <React.Fragment key={video.id || video._id}>
+              {idx > 0 && (
+                <div 
+                  className="mx-1 my-1 opacity-20" 
+                  style={{ height: '1px', backgroundColor: theme.border }}
+                />
+              )}
+              <motion.div
+                custom={idx}
+                initial="hidden"
+                animate="visible"
+                variants={videoItemVariants}
+                whileHover={{ 
+                  scale: 1.01, 
+                  transition: { duration: 0.2 }
                 }}
+                className={`w-full flex justify-between items-start py-2 px-2 transition-colors duration-300 cursor-pointer ${isCompleted ? 'border-l-4' : ''}`}
+                style={{ 
+                  background: isCompleted ? `${theme.accent}10` : isHovered ? `${theme.cardHover}` : 'none',
+                  borderLeftColor: isCompleted ? subtleAccent : 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  borderRadius: '0.375rem',
+                  boxShadow: isHovered ? `0 4px 6px -1px ${theme.shadow}` : 'none',
+                  willChange: 'transform, opacity',
+                  contain: 'layout'
+                }}
+                onClick={e => handleCardClick(e, video, idx)}
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                title={video.title}
+                layoutId={`video-${video.id || video._id}`}
               >
-                {videoCount} {videoCount === 1 ? 'video' : 'videos'}
-              </span>
-            )}
-          </div>
-        </div>
-        {/* Only show thumbnail for playlists with reduced size and make it clickable */}
-        {isPlaylist && firstVideo?.thumbnail && (
-          <div 
-            className="ml-6 flex-shrink-0 cursor-pointer group"
-            onClick={handleThumbnailClick}
-            title="Open playlist"
-          >
-            <div className="relative">
-              <img 
-                src={firstVideo.thumbnail} 
-                alt={topic.video.title}
-                className="w-48 h-27 object-cover rounded-lg shadow-md transition-transform group-hover:scale-105"
-              />
-              {/* Play button overlay */}
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                <div className="bg-white/90 rounded-full p-2 transform scale-90 group-hover:scale-100 transition-transform">
-                  <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Videos Grid */}
-      {videos && videos.length > 0 && (
-        <div className="space-y-4">
-          {videos.map((video) => (
-            <div key={video.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="p-6">
-                <div className="flex items-start space-x-6">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={completedVideos && completedVideos[video.id] || false}
-                      onChange={() => onToggleVideoComplete(video.id)}
-                      className="peer h-6 w-6 cursor-pointer appearance-none rounded-md border-2 border-gray-300 transition-all checked:border-orange-500 checked:bg-orange-500 hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                    />
-                    <svg
-                      className="pointer-events-none absolute left-1 top-1 h-4 w-4 opacity-0 transition-opacity peer-checked:opacity-100"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="white"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
+                <div className="flex items-start flex-1 min-w-0 pr-2">
+                  <motion.div 
+                    className="mr-2 mt-1 flex-shrink-0" 
+                    whileHover={{ scale: 1.2 }}
+                    style={{ color: theme.accent }}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
                     </svg>
-                  </div>
-                  <div className="flex-grow">
-                    <div className="flex items-start space-x-6">
-                      <div 
-                        onClick={() => onPlayVideo(video)}
-                        className="relative group flex-shrink-0 cursor-pointer"
-                      >
-                        <img 
-                          src={video.thumbnail} 
-                          alt={video.title}
-                          className="w-48 h-27 rounded-lg shadow-sm transition-transform group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                          <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="flex-grow">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                          {decodeUnicode(video.title)}
-                        </h4>
-                        <div className="flex items-center space-x-6 text-sm text-gray-600 mb-4">
-                          <span className="flex items-center">
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {isLoadingDurations && 
-                             (
-                               ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration) || 
-                               ['0:01', '0:00', '00:01', '00:00', 0, 1].includes(video.duration_seconds) ||
-                               (typeof video.duration_seconds === 'number' && video.duration_seconds < 60) ||
-                               (typeof video.duration === 'string' && video.duration.startsWith('0:') && parseInt(video.duration.split(':')[1]) < 30)
-                             ) ? 
-                              'Loading...' : formatDuration(video.duration)}
-                          </span>
-                          <span className="flex items-center">
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            {video.channel}
-                          </span>
-                        </div>
-                        
-                        <button
-                          onClick={() => onAddNote(video.id)}
-                          className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          <span className="font-medium">{videoNotes && videoNotes[video.id] ? 'Edit Notes' : 'Add Notes'}</span>
-                        </button>
-                      </div>
+                  </motion.div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm sm:text-base truncate transition-colors duration-300" 
+                      style={{ 
+                        color: isHovered ? theme.accent : theme.text
+                      }}
+                    >
+                      {video.title}
                     </div>
-
-                    {videoNotes && videoNotes[video.id] && (
-                      <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-100">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center space-x-2">
-                            <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            <span className="text-sm font-medium text-orange-700">Notes</span>
-                          </div>
-                          {noteTimestamps && noteTimestamps[video.id] && (
-                            <span className="text-xs text-orange-600">
-                              Last edited: {formatDate(noteTimestamps[video.id])}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {videoNotes[video.id]}
-                        </p>
-                      </div>
-                    )}
+                    <div className="text-xs flex flex-wrap gap-x-2 mt-0.5" style={{ color: theme.textMuted }}>
+                      <span className="whitespace-nowrap">{video.duration ? formatDuration(video.duration) : ''}</span>
+                      <span className="hidden sm:inline">&bull;</span>
+                      <span className="truncate">{video.channel || topic.video?.channel || 'Unknown'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+                {/* Vertical Three Dots Menu */}
+                <div className="relative flex-shrink-0" onClick={e => e.stopPropagation()}>
+                  <button
+                    className={`topic-menu-btn p-1 rounded-full focus:outline-none transition-colors duration-300 ${menuOpen ? 'z-20 relative' : ''}`}
+                    style={{ 
+                      backgroundColor: isHovered ? `${theme.accent}20` : 'transparent'
+                    }}
+                    onClick={() => setOpenMenuIdx(menuOpen ? null : idx)}
+                    aria-label="Open actions menu"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={isHovered ? theme.accent : theme.textMuted} strokeWidth={2}>
+                      <circle cx="12" cy="5" r="1.2" />
+                      <circle cx="12" cy="12" r="1.2" />
+                      <circle cx="12" cy="19" r="1.2" />
+                    </svg>
+                  </button>
+                  <AnimatePresence>
+                    {menuOpen && (
+                      <motion.div
+                        ref={el => (menuRefs.current[idx] = el)}
+                        className="absolute right-0 bottom-full z-50 mb-2 w-40 rounded-lg shadow-lg py-1 text-sm"
+                        initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                        transition={{ duration: 0.2 }}
+                        style={{
+                          backgroundColor: theme.cardBg,
+                          border: `1px solid ${theme.border}`
+                        }}
+                      >
+                        <motion.button
+                          className="w-full text-left px-4 py-2 whitespace-nowrap transition-colors duration-200"
+                          whileHover={{ backgroundColor: `${theme.accent}20` }}
+                          style={{ color: theme.text }}
+                          onClick={e => { e.stopPropagation(); onToggleComplete(video.id || video._id); setOpenMenuIdx(null); }}
+                        >
+                          {isCompleted ? 'Mark as Incomplete' : 'Mark as Complete'}
+                        </motion.button>
+                        <motion.button
+                          className="w-full text-left px-4 py-2 whitespace-nowrap transition-colors duration-200"
+                          whileHover={{ backgroundColor: `${theme.accent}20` }}
+                          style={{ color: theme.text }}
+                          onClick={e => { e.stopPropagation(); onAddNote(video.id || video._id); setOpenMenuIdx(null); }}
+                        >
+                          Edit Notes
+                        </motion.button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 };

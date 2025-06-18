@@ -30,6 +30,9 @@ const Navbar = () => {
   const isAuthPage = isLoginPage || isSignupPage || 
                      location.pathname === '/forgot-password' || 
                      location.pathname === '/reset-password';
+  
+  // Determine if we're on the landing page
+  const isHomePage = location.pathname === '/';
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -86,10 +89,10 @@ const Navbar = () => {
         backgroundColor: darkMode 
           ? isMobile 
             ? 'rgba(15, 23, 42, 0.8)' 
-            : 'rgba(15, 23, 42, 0.2)'
+            : isHomePage ? 'rgba(15, 23, 42, 0.2)' : 'rgba(15, 23, 42, 1)'
           : isMobile 
             ? 'rgba(255, 255, 255, 0.8)' 
-            : 'rgba(255, 255, 255, 0.2)',
+            : isHomePage ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 1)',
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

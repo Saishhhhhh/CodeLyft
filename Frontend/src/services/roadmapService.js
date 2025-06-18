@@ -738,4 +738,23 @@ export const updateRoadmapProgress = async (roadmapId, progressData) => {
     console.error('Error updating roadmap progress:', error);
     throw error;
   }
+};
+
+// Delete video notes
+export const deleteVideoNote = async (roadmapId, videoId) => {
+  try {
+    console.log('Deleting note for video:', videoId, 'in roadmap:', roadmapId);
+    const response = await api.delete(`/roadmaps/${roadmapId}/notes/${videoId}`);
+    console.log('Delete note response:', response.data);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error('Error deleting video note:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Failed to delete note'
+    };
+  }
 }; 
