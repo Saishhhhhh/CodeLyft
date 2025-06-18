@@ -3,6 +3,7 @@ import React from 'react';
 /**
  * SectionHeader component for displaying a section header with progress information
  * @param {Object} props
+ * @param {string} props.sectionId - Unique identifier for the section
  * @param {string} props.title - Section title
  * @param {string} props.description - Section description
  * @param {number} props.completedCount - Number of completed videos
@@ -13,6 +14,7 @@ import React from 'react';
  * @param {Object} props.theme - Theme object with color values
  */
 const SectionHeader = ({
+  sectionId,
   title,
   description,
   completedCount,
@@ -22,14 +24,31 @@ const SectionHeader = ({
   onToggle,
   theme
 }) => {
+  const handleToggle = (e) => {
+    e.preventDefault();
+    console.log('Section header clicked with ID:', sectionId);
+    if (typeof onToggle === 'function') {
+      if (sectionId) {
+        console.log('Calling onToggle with sectionId:', sectionId);
+        onToggle(sectionId);
+      } else {
+        console.error('Missing sectionId in SectionHeader');
+      }
+    } else {
+      console.error('Missing onToggle function in SectionHeader');
+    }
+  };
+
   return (
-    <div 
-      className="p-4 cursor-pointer transition-colors"
+    <button 
+      className="w-full p-4 cursor-pointer transition-colors text-left"
       style={{
         backgroundColor: theme.cardBg,
-        borderBottom: `1px solid ${theme.border}`
+        borderBottom: `1px solid ${theme.border}`,
+        outline: 'none'
       }}
-      onClick={onToggle}
+      onClick={handleToggle}
+      aria-expanded={isExpanded}
     >
       <div className="flex flex-col">
         <div className="flex items-start justify-between mb-2">
@@ -66,7 +85,7 @@ const SectionHeader = ({
           />
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 

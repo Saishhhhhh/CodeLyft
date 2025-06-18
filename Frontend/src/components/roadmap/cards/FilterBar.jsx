@@ -1,132 +1,126 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { FaSearch, FaSort } from 'react-icons/fa';
+import React from 'react';
+import { FaSearch, FaTimes } from 'react-icons/fa';
 
-// Animation variants
-const fadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
-};
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+  { value: 'progress', label: 'Progress' }
+];
 
-const FilterBar = ({ searchTerm, onSearchChange, activeTab, onTabChange, onSort }) => {
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  
+const TAB_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'regular', label: 'Personalized' },
+  { value: 'custom', label: 'Custom' },
+  { value: 'resources', label: 'With Resources' }
+];
+
+const FilterBar = ({
+  searchTerm,
+  onSearchChange,
+  activeTab,
+  onTabChange,
+  onSort,
+  onClearFilters,
+  darkMode
+}) => {
   return (
-    <motion.div
-      variants={fadeIn}
-      className="bg-white rounded-xl shadow-md p-4 mb-8"
-    >
-      <div className="flex flex-col md:flex-row gap-4">
-        {/* Search input */}
-        <div className="relative flex-grow">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FaSearch className="text-gray-400" />
-          </div>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search roadmaps..."
-            className="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-gray-700"
-          />
-        </div>
-        
-        {/* Filter tabs */}
-        <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+    <div className={`
+      p-4 rounded-xl mb-6 border
+      ${darkMode 
+        ? 'bg-gray-800/50 border-gray-700' 
+        : 'bg-white border-gray-200'
+      }
+    `}>
+      {/* Search Bar */}
+      <div className="relative mb-4">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search roadmaps..."
+          className={`
+            w-full pl-10 pr-4 py-2 rounded-lg
+            ${darkMode
+              ? 'bg-gray-900 border-gray-700 text-gray-200 placeholder-gray-500'
+              : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'
+            }
+            border focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+            transition-colors duration-200
+          `}
+        />
+        <FaSearch className={`absolute left-3 top-3 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+        {searchTerm && (
           <button
-            onClick={() => onTabChange('all')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'all' 
-                ? 'bg-white text-purple-700 shadow-sm' 
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            onClick={() => onSearchChange('')}
+            className={`absolute right-3 top-3 ${darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            All
+            <FaTimes />
           </button>
-          <button
-            onClick={() => onTabChange('regular')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'regular' 
-                ? 'bg-white text-purple-700 shadow-sm' 
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Regular
-          </button>
-          <button
-            onClick={() => onTabChange('custom')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'custom' 
-                ? 'bg-white text-purple-700 shadow-sm' 
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Custom
-          </button>
-          <button
-            onClick={() => onTabChange('resources')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'resources' 
-                ? 'bg-white text-purple-700 shadow-sm' 
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            With Resources
-          </button>
-        </div>
-        
-        {/* Sort button */}
-        <div className="relative">
-          <button 
-            onClick={() => setSortMenuOpen(!sortMenuOpen)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <FaSort className="mr-2" /> Sort
-          </button>
-          
-          {sortMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
-              <button 
-                onClick={() => {
-                  onSort('newest');
-                  setSortMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Newest First
-              </button>
-              <button 
-                onClick={() => {
-                  onSort('oldest');
-                  setSortMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Oldest First
-              </button>
-              <button 
-                onClick={() => {
-                  onSort('alphabetical');
-                  setSortMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Alphabetical
-              </button>
-              <button 
-                onClick={() => {
-                  onSort('progress');
-                  setSortMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Progress
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
-    </motion.div>
+
+      <div className="flex flex-col sm:flex-row gap-4">
+        {/* Tab Filters */}
+        <div className="flex flex-wrap gap-2 flex-1">
+          {TAB_OPTIONS.map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => onTabChange(tab.value)}
+              className={`
+                px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200
+                ${activeTab === tab.value
+                  ? darkMode
+                    ? 'bg-indigo-900/50 text-indigo-400 border border-indigo-500/30'
+                    : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                  : darkMode
+                    ? 'text-gray-400 hover:bg-gray-700 border border-gray-700'
+                    : 'text-gray-600 hover:bg-gray-100 border border-gray-200'
+                }
+              `}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Sort Dropdown */}
+        <select
+          onChange={(e) => onSort(e.target.value)}
+          className={`
+            px-3 py-1 rounded-lg text-sm
+            ${darkMode
+              ? 'bg-gray-900 border-gray-700 text-gray-300'
+              : 'bg-white border-gray-200 text-gray-700'
+            }
+            border focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+            transition-colors duration-200
+          `}
+        >
+          {SORT_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {/* Clear Filters */}
+        {(searchTerm || activeTab !== 'all') && (
+          <button
+            onClick={onClearFilters}
+            className={`
+              px-3 py-1 rounded-lg text-sm font-medium
+              ${darkMode
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }
+              transition-colors duration-200
+            `}
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+    </div>
   );
 };
 

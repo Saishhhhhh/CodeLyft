@@ -1,26 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getUserRoadmaps, deleteRoadmap } from '../services/roadmapService';
 import { useAuth } from '../context/AuthContext';
 import { useCustomRoadmap } from '../context/CustomRoadmapContext';
 import Navbar from '../components/Navbar';
 import ImportRoadmapModal from '../components/roadmap/ImportRoadmapModal';
-import { FaPlus, FaFileImport, FaSearch } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import ChatbotWrapper from '../components/chatbot/ChatbotWrapper';
 import { motion } from 'framer-motion';
+import { useTheme } from '../context/ThemeContext';
+import { FaRoad, FaPencilAlt, FaYoutube, FaSearch, FaSort } from 'react-icons/fa';
 
-// Import modular components
-import RoadmapCard from '../components/roadmap/cards/RoadmapCard';
-import RoadmapStats from '../components/roadmap/cards/RoadmapStats';
-import CreateRoadmapButton from '../components/roadmap/cards/CreateRoadmapButton';
+// Import our modular components
+import RoadmapList from '../components/roadmap/cards/RoadmapList';
+import RoadmapActions from '../components/roadmap/header/RoadmapActions';
+import EmptyState from '../components/roadmap/states/EmptyState';
+import NoResultsState from '../components/roadmap/states/NoResultsState';
+import LoadingState from '../components/roadmap/states/LoadingState';
 import FilterBar from '../components/roadmap/cards/FilterBar';
-import EmptyState from '../components/roadmap/cards/EmptyState';
+
+// Modular theme helper (matches HomePage/RoadmapProgressPage)
+const useRoadmapTheme = (darkMode = false) => ({
+  primary: '#4F46E5',
+  secondary: '#DA2C38',
+  accent: '#8B5CF6',
+  background: darkMode ? '#111827' : '#F9F9F9',
+  cardBg: darkMode ? '#1E293B' : '#FFFFFF',
+  text: darkMode ? '#F9F9F9' : '#111827',
+  textMuted: darkMode ? '#94A3B8' : '#6B7280',
+  border: darkMode ? '#334155' : '#E5E7EB',
+  codeBg: darkMode ? '#0F172A' : '#F3F4F6',
+  codeText: '#4F46E5',
+  shadow: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)',
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#3B82F6',
+  progressBg: darkMode ? '#1F2937' : '#F3F4F6',
+  progressFill: '#4F46E5',
+  progressText: darkMode ? '#F9F9F9' : '#111827',
+  buttonPrimary: '#4F46E5',
+  buttonSecondary: '#8B5CF6',
+  buttonText: '#FFFFFF',
+  buttonHover: '#4338CA',
+  modalBg: darkMode ? '#1E293B' : '#FFFFFF',
+  modalOverlay: darkMode ? 'rgba(0, 0, 0, 0.75)' : 'rgba(0, 0, 0, 0.5)',
+  cardBorder: darkMode ? '#334155' : '#E5E7EB',
+  cardHover: darkMode ? '#2D3748' : '#F9FAFB',
+  animationPrimary: '#4F46E5',
+  animationSecondary: '#8B5CF6',
+  animationAccent: '#DA2C38',
+});
 
 // Animation variants
-const fadeIn = {
+const pageVariants = {
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1, 
+    transition: {
+      when: "beforeChildren",
+      staggerChildren: 0.2
+    }
+  }
+};
+
+const sectionVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
 // Main Component
@@ -35,6 +81,8 @@ const MyRoadmapsPage = () => {
   
   const { isAuthenticated, user } = useAuth();
   const { savedRoadmaps, loadSavedRoadmaps, deleteSavedRoadmap, isLoading: isLoadingCustomRoadmaps } = useCustomRoadmap();
+  const { darkMode } = useTheme();
+  const theme = useRoadmapTheme(darkMode);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -110,6 +158,13 @@ const MyRoadmapsPage = () => {
     toast.success('Roadmap imported successfully');
   };
 
+  // Handle clearing filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setActiveTab('all');
+    setSortMethod('newest');
+  };
+
   // Handle sorting and filtering
   const filterAndSortRoadmaps = () => {
     // First filter by search term
@@ -146,15 +201,30 @@ const MyRoadmapsPage = () => {
     
     // Sort results
     const sortRoadmaps = (a, b) => {
+      const getDate = (roadmap) => {
+        const date = roadmap.updatedAt || roadmap.createdAt;
+        return date ? new Date(date).getTime() : 0;
+      };
+
+      const getProgress = (roadmap) => {
+        if (roadmap.completionPercentage !== undefined) {
+          return roadmap.completionPercentage;
+        }
+        if (roadmap.completedResources !== undefined && roadmap.totalResources) {
+          return Math.round((roadmap.completedResources / roadmap.totalResources) * 100);
+        }
+        return 0;
+      };
+
       switch (sortMethod) {
         case 'newest':
-          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+          return getDate(b) - getDate(a);
         case 'oldest':
-          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-        case 'alphabetical':
-          return (a.title || a.name || '').localeCompare(b.title || b.name || '');
+          return getDate(a) - getDate(b);
         case 'progress':
-          return (b.completionPercentage || 0) - (a.completionPercentage || 0);
+          return getProgress(b) - getProgress(a);
+        case 'progressAsc':
+          return getProgress(a) - getProgress(b);
         default:
           return 0;
       }
@@ -172,156 +242,216 @@ const MyRoadmapsPage = () => {
   const hasFilteredResults = filteredRegularRoadmaps.length > 0 || filteredCustomRoadmaps.length > 0;
   
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <Navbar />
-      <div className="container mx-auto px-4 py-10 pt-24">
-        <motion.div 
-          initial="hidden"
-          animate="visible"
-          variants={{
-            visible: {
-              transition: {
-                staggerChildren: 0.1
-              }
-            }
-          }}
+      
+      <motion.main
+        variants={pageVariants}
+        initial="hidden"
+        animate="visible"
+        className="container mx-auto px-4 py-8 pt-20"
+      >
+        {/* Page Title */}
+        <motion.div
+          variants={sectionVariants}
+          className="mb-8"
         >
-          {/* Page Header */}
-          <motion.div 
-            variants={fadeIn}
-            className="flex flex-col md:flex-row justify-between items-center mb-8"
-          >
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">My Roadmaps</h1>
-              <p className="text-gray-600">Manage and track your learning journeys</p>
-            </div>
-            
-            <div className="flex space-x-3 mt-4 md:mt-0">
-              <button
-                onClick={() => setImportModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-purple-600 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <FaFileImport className="mr-2" /> Import
-              </button>
-              <Link 
-                to="/"
-                className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                <FaPlus className="mr-2" /> Create New
-              </Link>
-            </div>
-          </motion.div>
+          <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            {user?.name ? `${user.name.split(' ')[0]}'s Roadmaps` : 'My Roadmaps'}
+          </h1>
+          <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Manage and track your learning journey
+          </p>
+        </motion.div>
 
-          {/* Loading State */}
-          {isLoadingAll && (
-            <div className="flex justify-center items-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-            </div>
-          )}
+        {/* Header Section */}
+        <motion.div variants={sectionVariants} className="mb-8">
+          <RoadmapActions
+            onCreateCustom={() => navigate('/custom-roadmap')}
+            theme={theme}
+          />
+        </motion.div>
 
-          {/* Error State */}
-          {error && (
-            <motion.div 
-              variants={fadeIn}
-              className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-8"
-            >
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
+        {/* Combined Filters and Stats Section */}
+        <motion.div variants={sectionVariants} className="mb-8">
+          <div className="rounded-xl border shadow-lg p-6" style={{ background: theme.cardBg, borderColor: theme.border }}>
+            {/* Stats Row */}
+            {hasRoadmaps && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {/* Total Roadmaps */}
+                <div className="flex items-center p-4 rounded-lg" style={{ background: theme.background }}>
+                  <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center mr-4">
+                    <FaRoad className="text-white text-xl" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: theme.textMuted }}>Total Roadmaps</p>
+                    <p className="text-2xl font-bold text-indigo-500">{roadmaps.length + savedRoadmaps.length}</p>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium">{error}</p>
+
+                {/* Custom Roadmaps */}
+                <div className="flex items-center p-4 rounded-lg" style={{ background: theme.background }}>
+                  <div className="w-10 h-10 bg-violet-600 rounded-full flex items-center justify-center mr-4">
+                    <FaPencilAlt className="text-white text-xl" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: theme.textMuted }}>Custom Roadmaps</p>
+                    <p className="text-2xl font-bold text-violet-500">{savedRoadmaps.length}</p>
+                  </div>
+                </div>
+
+                {/* With Resources */}
+                <div className="flex items-center p-4 rounded-lg" style={{ background: theme.background }}>
+                  <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center mr-4">
+                    <FaYoutube className="text-white text-xl" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: theme.textMuted }}>With Resources</p>
+                    <p className="text-2xl font-bold text-green-500">
+                      {[...roadmaps, ...savedRoadmaps].filter(roadmap => 
+                        roadmap.topics?.some(topic => 
+                          (topic.hasGeneratedResources && topic.resources?.length > 0) || 
+                          (topic.video?.videos?.length > 0)
+                        )
+                      ).length}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </motion.div>
-          )}
+            )}
 
-          {/* Empty State */}
-          {!isLoadingAll && !error && !hasRoadmaps && (
-            <EmptyState onImport={() => setImportModalOpen(true)} />
-          )}
+            {/* Search and Filters */}
+            <div className="space-y-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaSearch style={{ color: theme.textMuted }} />
+                </div>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search roadmaps..."
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border"
+                  style={{
+                    background: theme.background,
+                    borderColor: theme.border,
+                    color: theme.text
+                  }}
+                />
+              </div>
 
-          {/* Content when roadmaps exist */}
-          {!isLoadingAll && !error && hasRoadmaps && (
-            <>
-              {/* Stats Section */}
-              <RoadmapStats regular={roadmaps} custom={savedRoadmaps} />
-              
-              {/* Create Roadmap Banner */}
-              <CreateRoadmapButton />
-              
-              {/* Filter Bar */}
-              <FilterBar 
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                onSort={setSortMethod}
-              />
-              
-              {/* No results after filtering */}
-              {!hasFilteredResults && (
-                <motion.div 
-                  variants={fadeIn}
-                  className="bg-white rounded-xl shadow-md p-8 text-center"
+              {/* Sort Dropdown */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaSort style={{ color: theme.textMuted }} />
+                </div>
+                <select
+                  value={sortMethod}
+                  onChange={(e) => setSortMethod(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border appearance-none"
+                  style={{
+                    background: theme.background,
+                    borderColor: theme.border,
+                    color: theme.text
+                  }}
                 >
-                  <FaSearch className="mx-auto text-gray-400 text-4xl mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-700 mb-2">No matching roadmaps found</h2>
-                  <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-                  <button 
-                    onClick={() => {
-                      setSearchTerm('');
-                      setActiveTab('all');
-                    }}
-                    className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    Clear Filters
-                  </button>
-                </motion.div>
-              )}
-              
-              {/* Roadmaps Grid */}
-              {hasFilteredResults && (
-                <motion.div
-                  variants={fadeIn}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="progress">Progress</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <svg className="h-4 w-4" fill="none" stroke={theme.textMuted} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Tab Navigation */}
+              <div className="flex border-b" style={{ borderColor: theme.border }}>
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`px-4 py-2 font-medium ${activeTab === 'all' ? 'border-b-2' : ''}`}
+                  style={{
+                    borderColor: activeTab === 'all' ? theme.primary : 'transparent',
+                    color: activeTab === 'all' ? theme.primary : theme.textMuted
+                  }}
                 >
-                  {/* Regular Roadmaps */}
-                  {filteredRegularRoadmaps.map((roadmap) => (
-                    <RoadmapCard 
-                      key={roadmap._id}
-                      roadmap={roadmap}
-                      onDelete={handleDeleteRoadmap}
-                      type="regular"
-                    />
-                  ))}
-                  
-                  {/* Custom Roadmaps */}
-                  {filteredCustomRoadmaps.map((roadmap) => (
-                    <RoadmapCard 
-                      key={roadmap._id || roadmap.id}
-                      roadmap={roadmap}
-                      onDelete={handleDeleteCustomRoadmap}
-                      onEdit={handleEditCustomRoadmap}
-                      type="custom"
-                    />
-                  ))}
-                </motion.div>
-              )}
-            </>
+                  All Roadmaps
+                </button>
+                <button
+                  onClick={() => setActiveTab('regular')}
+                  className={`px-4 py-2 font-medium ${activeTab === 'regular' ? 'border-b-2' : ''}`}
+                  style={{
+                    borderColor: activeTab === 'regular' ? theme.primary : 'transparent',
+                    color: activeTab === 'regular' ? theme.primary : theme.textMuted
+                  }}
+                >
+                  Standard
+                </button>
+                <button
+                  onClick={() => setActiveTab('custom')}
+                  className={`px-4 py-2 font-medium ${activeTab === 'custom' ? 'border-b-2' : ''}`}
+                  style={{
+                    borderColor: activeTab === 'custom' ? theme.primary : 'transparent',
+                    color: activeTab === 'custom' ? theme.primary : theme.textMuted
+                  }}
+                >
+                  Custom
+                </button>
+                <button
+                  onClick={() => setActiveTab('resources')}
+                  className={`px-4 py-2 font-medium ${activeTab === 'resources' ? 'border-b-2' : ''}`}
+                  style={{
+                    borderColor: activeTab === 'resources' ? theme.primary : 'transparent',
+                    color: activeTab === 'resources' ? theme.primary : theme.textMuted
+                  }}
+                >
+                  With Resources
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Content Section */}
+        <motion.div variants={sectionVariants}>
+          {isLoadingAll ? (
+            <LoadingState theme={theme} />
+          ) : error ? (
+            <div className="text-red-500 text-center py-8">{error}</div>
+          ) : !hasRoadmaps ? (
+            <EmptyState
+              onCreateCustom={() => navigate('/custom-roadmap')}
+              theme={theme}
+            />
+          ) : !hasFilteredResults ? (
+            <NoResultsState onClearFilters={handleClearFilters} theme={theme} />
+          ) : (
+            <RoadmapList
+              regularRoadmaps={filteredRegularRoadmaps}
+              customRoadmaps={filteredCustomRoadmaps}
+              onDeleteRegular={handleDeleteRoadmap}
+              onDeleteCustom={handleDeleteCustomRoadmap}
+              onEditCustom={handleEditCustomRoadmap}
+              searchTerm={searchTerm}
+              activeTab={activeTab}
+              sortMethod={sortMethod}
+              darkMode={darkMode}
+            />
           )}
         </motion.div>
-      </div>
-      
+      </motion.main>
+
       {/* Import Modal */}
-      <ImportRoadmapModal 
-        isOpen={importModalOpen} 
-        onClose={() => setImportModalOpen(false)} 
+      <ImportRoadmapModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
         onSuccess={handleImportSuccess}
+        theme={theme}
       />
-      
+
+      {/* Chatbot */}
       <ChatbotWrapper />
     </div>
   );

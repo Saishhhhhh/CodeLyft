@@ -107,8 +107,13 @@ const TopicSection = ({
                     </div>
                     <div className="text-xs flex flex-wrap gap-x-2 mt-0.5" style={{ color: theme.textMuted }}>
                       <span className="whitespace-nowrap">{video.duration ? formatDuration(video.duration) : ''}</span>
-                      <span className="hidden sm:inline">&bull;</span>
-                      <span className="truncate">{video.channel || topic.video?.channel || 'Unknown'}</span>
+                      {video.duration && <span className="hidden sm:inline">&bull;</span>}
+                      <span className="truncate">
+                        {video.channel || 
+                         topic.video?.channel || 
+                         video.source || 
+                         'YouTube'}
+                      </span>
                     </div>
                   </div>
                 </div>

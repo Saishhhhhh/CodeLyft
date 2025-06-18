@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaTrash, FaEdit, FaChevronRight, FaYoutube, FaBookOpen } from 'react-icons/fa';
@@ -28,8 +28,22 @@ const RoadmapCard = ({ roadmap, onDelete, onEdit, type }) => {
 
   // Get percentage completion
   const getPercentage = () => {
-    if (!roadmap.completionPercentage) return 0;
-    return Math.min(100, Math.max(0, roadmap.completionPercentage));
+    if (!roadmap.completionPercentage && !roadmap.completedResources) return 0;
+    if (roadmap.completionPercentage) return Math.min(100, Math.max(0, roadmap.completionPercentage));
+    
+    // Calculate percentage from completed resources
+    const completed = roadmap.completedResources || 0;
+    const total = roadmap.totalResources || 1;
+    return Math.round((completed / total) * 100);
+  };
+
+  // Get progress color based on percentage
+  const getProgressColor = (percentage) => {
+    if (percentage >= 100) return 'bg-green-500';
+    if (percentage >= 75) return 'bg-blue-500';
+    if (percentage >= 50) return 'bg-yellow-500';
+    if (percentage >= 25) return 'bg-orange-500';
+    return 'bg-purple-500';
   };
 
   // Get title based on roadmap type
@@ -38,15 +52,16 @@ const RoadmapCard = ({ roadmap, onDelete, onEdit, type }) => {
   const id = roadmap._id || roadmap.id;
   const category = roadmap.category || (isCustom ? 'Custom Roadmap' : 'General');
   const difficulty = isCustom ? "Custom" : roadmap.difficulty || 'Intermediate';
+  const percentage = getPercentage();
   
   // Handle navigation based on roadmap type and resources
   const handleCardClick = () => {
     if (isCustom) {
-      navigate(`/roadmaps/${id}/custom`);
+      navigate(`/roadmaps/${id}/resources?isCustom=true`);
     } else if (hasResources) {
       navigate(`/roadmaps/${id}/resources`);
     } else {
-      navigate(`/roadmaps/${id}`);
+      navigate(`/roadmaps/${id}/view`);
     }
   };
 
@@ -57,13 +72,18 @@ const RoadmapCard = ({ roadmap, onDelete, onEdit, type }) => {
       className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden
                  ${hasResources ? 'border-l-4 border-purple-500' : ''}`}
     >
-      {/* Progress bar (if applicable) */}
-      {getPercentage() > 0 && (
-        <div className="relative h-1 bg-gray-200">
+      {/* Progress bar (show for all roadmaps with resources) */}
+      {hasResources && (
+        <div className="relative h-2 bg-gray-100">
           <div 
-            className="absolute top-0 left-0 h-1 bg-blue-500"
-            style={{ width: `${getPercentage()}%` }}
-          ></div>
+            className={`absolute top-0 left-0 h-2 transition-all duration-500 ${getProgressColor(percentage)}`}
+            style={{ width: `${percentage}%` }}
+          />
+          {percentage > 0 && (
+            <div className="absolute top-0 right-2 text-[10px] font-medium text-gray-600 transform translate-y-[-50%] bg-white px-1 rounded shadow-sm border">
+              {percentage}%
+            </div>
+          )}
         </div>
       )}
       
@@ -96,7 +116,11 @@ const RoadmapCard = ({ roadmap, onDelete, onEdit, type }) => {
         {/* Bottom info and actions */}
         <div className="flex justify-between items-center">
           <div className="flex items-center text-sm text-gray-500">
-            {isCustom ? (
+            {hasResources ? (
+              <span>
+                {roadmap.completedResources || 0}/{roadmap.totalResources || 0} Resources
+              </span>
+            ) : isCustom ? (
               <span>Topics: {roadmap.topics?.length || 0}</span>
             ) : (
               <span>{roadmap.createdAt ? new Date(roadmap.createdAt).toLocaleDateString() : "Recently"}</span>
