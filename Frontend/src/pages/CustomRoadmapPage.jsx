@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { FaPlus, FaTrash, FaArrowUp, FaArrowDown, FaSave, FaEdit } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaArrowUp, FaArrowDown, FaSave, FaEdit, FaGripVertical } from 'react-icons/fa';
 import { useCustomRoadmap } from '../context/CustomRoadmapContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { updateCustomRoadmap } from '../services/customRoadmapService';
+import Navbar from '../components/Navbar';
+import HeroAnimation from '../components/HeroAnimation';
 
 const CustomRoadmapPage = () => {
   // Get the roadmap ID from URL params and any state passed during navigation
@@ -13,6 +16,29 @@ const CustomRoadmapPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const passedRoadmap = location.state?.roadmap;
+  const { darkMode } = useTheme();
+
+  // Define colors based on theme - Using the provided color palette
+  const colors = {
+    // Primary and accent colors - Indigo Purple Theme
+    primary: darkMode ? '#8B5CF6' : '#7C3AED', // Purple - main brand color
+    secondary: darkMode ? '#6366F1' : '#4F46E5', // Indigo - secondary color
+    accent: darkMode ? '#A78BFA' : '#8B5CF6', // Light Purple - complementary accent
+    
+    // Background colors
+    background: darkMode ? '#0F172A' : '#F8FAFC', // Dark blue-black / Light slate
+    cardBg: darkMode ? '#1E293B' : '#FFFFFF', // Darker background / White
+    
+    // Text colors
+    text: darkMode ? '#F1F5F9' : '#1E293B', // Light Gray / Dark slate
+    textMuted: darkMode ? '#CBD5E1' : '#64748B', // Light gray / Medium slate
+    
+    // UI elements
+    border: darkMode ? '#475569' : '#E2E8F0', // Medium-dark gray / Light slate
+    codeBg: darkMode ? '#1E293B' : '#F1F5F9', // Dark blue-black / Light slate
+    codeText: darkMode ? '#93C5FD' : '#7C3AED', // Light blue / Purple
+    shadow: darkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.1)', // Shadows
+  };
 
   const { 
     currentRoadmap, 
@@ -38,6 +64,8 @@ const CustomRoadmapPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [draggedTopicId, setDraggedTopicId] = useState(null);
+  const [dragOverTopicId, setDragOverTopicId] = useState(null);
   
   // Use a ref to track if we've already processed the roadmap
   const hasProcessedRoadmap = useRef(false);
@@ -199,22 +227,6 @@ const CustomRoadmapPage = () => {
     }
   };
 
-  const handleExport = () => {
-    const roadmapJson = exportRoadmap();
-    if (roadmapJson) {
-      // Create a blob and download link
-      const blob = new Blob([roadmapJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentRoadmap.name.replace(/\s+/g, '-').toLowerCase()}-roadmap.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-  };
-
   const handleSaveRoadmap = async () => {
     if (!isAuthenticated) {
       toast.error("Please log in to save your roadmap");
@@ -233,10 +245,14 @@ const CustomRoadmapPage = () => {
         console.log("Roadmap saved successfully:", savedRoadmap);
         toast.success("Roadmap saved successfully!");
         
-        // Navigate to the roadmap with its ID in the URL if it's a new save
-        if (id !== savedRoadmap._id) {
-          navigate(`/custom-roadmap/${savedRoadmap._id}`);
-        }
+        // Navigate to the roadmap result page with the saved roadmap
+        navigate(`/roadmaps/${savedRoadmap._id}/view`, {
+          state: { 
+            roadmap: savedRoadmap,
+            fromSaved: true,
+            isCustom: true
+          }
+        });
       }
     } catch (error) {
       console.error("Error saving roadmap:", error);
@@ -308,6 +324,65 @@ const CustomRoadmapPage = () => {
     }
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e, topicId) => {
+    setDraggedTopicId(topicId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', topicId);
+  };
+
+  const handleDragOver = (e, topicId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTopicId(topicId);
+  };
+
+  const handleDragLeave = (e) => {
+    setDragOverTopicId(null);
+  };
+
+  const handleDrop = (e, targetTopicId) => {
+    e.preventDefault();
+    setDragOverTopicId(null);
+    
+    if (draggedTopicId === targetTopicId) {
+      return;
+    }
+
+    if (!currentRoadmap || !Array.isArray(currentRoadmap.topics)) {
+      return;
+    }
+
+    const topics = [...currentRoadmap.topics];
+    const draggedIndex = topics.findIndex(topic => topic.id === draggedTopicId);
+    const targetIndex = topics.findIndex(topic => topic.id === targetTopicId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      return;
+    }
+
+    // Remove the dragged topic from its current position
+    const [draggedTopic] = topics.splice(draggedIndex, 1);
+    
+    // Insert it at the target position
+    topics.splice(targetIndex, 0, draggedTopic);
+
+    // Update the current roadmap with the reordered topics
+    const updatedRoadmap = {
+      ...currentRoadmap,
+      topics
+    };
+
+    // Update the state directly
+    setCurrentRoadmap(updatedRoadmap);
+    console.log("Topics reordered via drag and drop, updated roadmap:", updatedRoadmap);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTopicId(null);
+    setDragOverTopicId(null);
+  };
+
   // Function to directly update a roadmap (bypassing the context to avoid creating new roadmaps)
   const handleUpdateRoadmap = async () => {
     if (!isAuthenticated) {
@@ -363,6 +438,24 @@ const CustomRoadmapPage = () => {
     };
   }, [resetCurrentRoadmap]);
 
+  // Handle placeholder styling for theme changes
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-roadmap-input::placeholder {
+        color: ${colors.textMuted} !important;
+      }
+      .custom-roadmap-textarea::placeholder {
+        color: ${colors.textMuted} !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, [colors.textMuted]);
+
   // Detect direct navigation to /custom-roadmap with no state
   useEffect(() => {
     // Only reset to creation mode if we're directly navigating to the page
@@ -404,13 +497,33 @@ const CustomRoadmapPage = () => {
     toast.success("Ready to create a new roadmap!");
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.2
+      }
+    }
+  };
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-xl">Loading roadmap...</p>
+      <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: colors.background }}>
+        <Navbar />
+        <HeroAnimation />
+        <div className="pt-16 flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4" style={{ borderColor: colors.primary }}></div>
+            <p className="text-xl" style={{ color: colors.text }}>Loading roadmap...</p>
+          </div>
         </div>
       </div>
     );
@@ -418,245 +531,391 @@ const CustomRoadmapPage = () => {
 
   if (isCreatingRoadmap) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-            Create Custom Roadmap
-          </h1>
-          
-          <div className="p-6 bg-gray-800 rounded-lg shadow-lg">
-            <div className="mb-4">
-              <label htmlFor="roadmap-name" className="block text-sm font-medium mb-2">
-                Roadmap Name
-              </label>
-              <input
-                id="roadmap-name"
-                type="text"
-                value={roadmapName}
-                onChange={(e) => setRoadmapName(e.target.value)}
-                placeholder="Enter roadmap name"
-                className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-            
-            <div className="mb-6">
-              <label htmlFor="roadmap-description" className="block text-sm font-medium mb-2">
-                Description (Optional)
-              </label>
-              <textarea
-                id="roadmap-description"
-                value={roadmapDescription}
-                onChange={(e) => setRoadmapDescription(e.target.value)}
-                placeholder="Enter a description for your roadmap"
-                className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px]"
-              />
-            </div>
-            
-            <button
-              onClick={handleCreateRoadmap}
-              className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center justify-center"
-            >
-              <FaPlus className="mr-2" /> Create & Continue to Topic Addition
-            </button>
+      <div className="min-h-screen transition-colors duration-300 relative overflow-hidden" style={{ backgroundColor: colors.background }}>
+        {/* Background Elements */}
+        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+          <div 
+            className="absolute inset-0"
+            style={{ 
+              backgroundColor: darkMode ? '#8B5CF610' : '#7C3AED08',
+              opacity: 1
+            }}
+          />
+        </div>
 
-            <p className="mt-4 text-sm text-gray-400">
-              After creating your roadmap, you'll be able to add topics and organize your learning path.
-            </p>
-          </div>
-
-          <div className="mt-6 flex justify-center">
-            <button
-              onClick={() => navigate('/my-roadmaps')}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm"
+        <Navbar />
+        <HeroAnimation />
+        
+        <div className="pt-16 relative z-10">
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+            className="max-w-2xl mx-auto px-4 py-8"
+          >
+            <motion.div variants={cardVariants}>
+              <h1 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-center bg-gradient-to-r from-indigo-400 to-purple-600 bg-clip-text text-transparent">
+                Create Custom Roadmap
+              </h1>
+            </motion.div>
+            
+            <motion.div 
+              variants={cardVariants}
+              className="p-4 md:p-8 rounded-xl shadow-2xl"
+              style={{ 
+                backgroundColor: colors.cardBg,
+                border: `1px solid ${colors.border}`,
+                boxShadow: `0 20px 25px -5px ${colors.shadow}, 0 10px 10px -5px ${colors.shadow}`
+              }}
             >
-              Back to My Roadmaps
-            </button>
-          </div>
+              <div className="mb-4 md:mb-6">
+                <label htmlFor="roadmap-name" className="block text-sm font-medium mb-2 md:mb-3" style={{ color: colors.text }}>
+                  Roadmap Name
+                </label>
+                <input
+                  id="roadmap-name"
+                  type="text"
+                  value={roadmapName}
+                  onChange={(e) => setRoadmapName(e.target.value)}
+                  placeholder="Enter roadmap name"
+                  className="w-full p-3 md:p-4 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-200 custom-roadmap-input"
+                  style={{ 
+                    backgroundColor: colors.codeBg,
+                    borderColor: colors.border,
+                    color: colors.text,
+                    focusRingColor: colors.primary
+                  }}
+                />
+              </div>
+              
+              <div className="mb-6 md:mb-8">
+                <label htmlFor="roadmap-description" className="block text-sm font-medium mb-2 md:mb-3" style={{ color: colors.text }}>
+                  Description (Optional)
+                </label>
+                <textarea
+                  id="roadmap-description"
+                  value={roadmapDescription}
+                  onChange={(e) => setRoadmapDescription(e.target.value)}
+                  placeholder="Enter a description for your roadmap"
+                  className="w-full p-3 md:p-4 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-200 min-h-[100px] md:min-h-[120px] resize-none custom-roadmap-textarea"
+                  style={{ 
+                    backgroundColor: colors.codeBg,
+                    borderColor: colors.border,
+                    color: colors.text,
+                    focusRingColor: colors.primary
+                  }}
+                />
+              </div>
+              
+              <button
+                onClick={handleCreateRoadmap}
+                className="w-full px-6 md:px-6 py-3 md:py-4 rounded-lg transition-all duration-200 flex items-center justify-center font-medium text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                style={{ 
+                  backgroundColor: colors.primary,
+                  boxShadow: `0 4px 14px 0 ${colors.primary}40`
+                }}
+              >
+                <FaPlus className="mr-2 md:mr-3 text-base md:text-lg" /> 
+                <span className="text-sm md:text-base">Create & Continue to Topic Addition</span>
+              </button>
+
+              <p className="mt-4 md:mt-6 text-sm text-center px-2" style={{ color: colors.textMuted }}>
+                After creating your roadmap, you'll be able to add topics and organize your learning path.
+              </p>
+            </motion.div>
+
+            <motion.div variants={cardVariants} className="mt-6 md:mt-8 flex justify-center">
+              <button
+                onClick={() => navigate('/my-roadmaps')}
+                className="px-6 md:px-8 py-3 md:py-3 rounded-lg transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                style={{ 
+                  backgroundColor: colors.codeBg,
+                  color: colors.text,
+                  border: `1px solid ${colors.border}`,
+                  boxShadow: `0 4px 14px 0 ${colors.shadow}`
+                }}
+              >
+                <span className="text-sm md:text-base">Back to My Roadmaps</span>
+              </button>
+            </motion.div>
+          </motion.div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold mb-2 text-center bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-          {currentRoadmap?.name || 'Custom Learning Roadmap'}
-        </h1>
-        
-        {currentRoadmap?.description && (
-          <p className="text-center text-gray-400 mb-8">
-            {currentRoadmap.description}
-          </p>
-        )}
-        
-        <div className="mb-10 p-6 bg-gray-800 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4">Add New Topic</h2>
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={newTopic}
-              onChange={(e) => setNewTopic(e.target.value)}
-              placeholder="Enter a topic (e.g., React Basics, CSS Grid, etc.)"
-              className="flex-grow p-3 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <button
-              onClick={handleAddTopic}
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-2 transition-colors"
-            >
-              <FaPlus /> Add Topic
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen transition-colors duration-300 relative overflow-hidden" style={{ backgroundColor: colors.background }}>
+      {/* Background Elements */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div 
+          className="absolute inset-0"
+          style={{ 
+            backgroundColor: darkMode ? '#8B5CF610' : '#7C3AED08',
+            opacity: 1
+          }}
+        />
+      </div>
 
-        {currentRoadmap?.topics?.length > 0 ? (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold mb-4">Your Custom Roadmap</h2>
+      <Navbar />
+      <HeroAnimation />
+      
+      <div className="pt-16 relative z-10">
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+          className="max-w-6xl mx-auto px-4 py-8"
+        >
+          <motion.div variants={cardVariants} className="text-center mb-8 md:mb-12">
+            <h1 className="text-2xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-indigo-400 to-purple-600 bg-clip-text text-transparent">
+              {currentRoadmap?.name || 'Custom Learning Roadmap'}
+            </h1>
             
-            {currentRoadmap.topics.map((topic, index) => (
-              <motion.div
-                key={topic.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="bg-gray-800 rounded-lg shadow-lg overflow-hidden"
+            {currentRoadmap?.description && (
+              <p className="text-base md:text-lg px-4" style={{ color: colors.textMuted }}>
+                {currentRoadmap.description}
+              </p>
+            )}
+          </motion.div>
+          
+          <motion.div 
+            variants={cardVariants}
+            className="mb-8 md:mb-12 p-4 md:p-8 rounded-xl shadow-2xl"
+            style={{ 
+              backgroundColor: colors.cardBg,
+              border: `1px solid ${colors.border}`,
+              boxShadow: `0 20px 25px -5px ${colors.shadow}, 0 10px 10px -5px ${colors.shadow}`
+            }}
+          >
+            <h2 className="text-xl md:text-2xl font-semibold mb-4 md:mb-6" style={{ color: colors.text }}>Add New Topic</h2>
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
+              <input
+                type="text"
+                value={newTopic}
+                onChange={(e) => setNewTopic(e.target.value)}
+                placeholder="Enter a topic (e.g., React Basics, CSS Grid, etc.)"
+                className="flex-grow p-3 md:p-4 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-200 custom-roadmap-input"
+                style={{ 
+                  backgroundColor: colors.codeBg,
+                  borderColor: colors.border,
+                  color: colors.text,
+                  focusRingColor: colors.primary
+                }}
+              />
+              <button
+                onClick={handleAddTopic}
+                className="px-6 md:px-8 py-3 md:py-4 rounded-lg flex items-center justify-center gap-2 md:gap-3 transition-all duration-200 font-medium text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                style={{ 
+                  backgroundColor: colors.primary,
+                  boxShadow: `0 4px 14px 0 ${colors.primary}40`
+                }}
               >
-                <div className="p-6 flex justify-between items-center">
-                  <div>
-                    <h3 className="text-xl font-medium">
-                      {index + 1}. {topic.title}
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleReorderTopics(topic.id, 'up')}
-                      disabled={index === 0}
-                      className={`p-2 rounded-full ${index === 0 ? 'text-gray-600' : 'hover:bg-gray-700'}`}
-                      title="Move up"
-                    >
-                      <FaArrowUp />
-                    </button>
-                    <button
-                      onClick={() => handleReorderTopics(topic.id, 'down')}
-                      disabled={index === currentRoadmap.topics.length - 1}
-                      className={`p-2 rounded-full ${index === currentRoadmap.topics.length - 1 ? 'text-gray-600' : 'hover:bg-gray-700'}`}
-                      title="Move down"
-                    >
-                      <FaArrowDown />
-                    </button>
-                    <button
-                      onClick={() => handleRemoveTopic(topic.id)}
-                      className="p-2 rounded-full hover:bg-red-700 text-red-500 hover:text-white"
-                      title="Remove topic"
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center p-12 bg-gray-800 rounded-lg">
-            <h2 className="text-2xl font-semibold mb-4">Your roadmap is empty</h2>
-            <p className="text-gray-400 mb-6">
-              Start by adding topics to your custom learning roadmap. 
-            </p>
-          </div>
-        )}
+                <FaPlus className="text-base md:text-lg" /> 
+                <span className="hidden sm:inline">Add Topic</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            </div>
+          </motion.div>
 
-        {currentRoadmap?.topics?.length > 0 && (
-          <div className="mt-10 p-6 bg-gray-800 rounded-lg">
-            <h2 className="text-2xl font-semibold mb-4">Roadmap Options</h2>
-            <div className="flex flex-wrap gap-4">
+          {currentRoadmap?.topics?.length > 0 ? (
+            <motion.div variants={cardVariants} className="space-y-4 md:space-y-6 mb-8 md:mb-12">
+              <h2 className="text-xl md:text-2xl font-semibold mb-4 md:mb-6" style={{ color: colors.text }}>Your Custom Roadmap</h2>
+              
+              {currentRoadmap.topics.map((topic, index) => (
+                <motion.div
+                  key={topic.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, topic.id)}
+                  onDragOver={(e) => handleDragOver(e, topic.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, topic.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`p-4 md:p-6 rounded-xl shadow-lg overflow-hidden transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1 cursor-move ${
+                    draggedTopicId === topic.id ? 'opacity-50 scale-95' : ''
+                  } ${
+                    dragOverTopicId === topic.id && draggedTopicId !== topic.id 
+                      ? 'ring-2 ring-purple-400 bg-purple-50 dark:bg-purple-900/20' 
+                      : ''
+                  }`}
+                  style={{ 
+                    backgroundColor: colors.cardBg,
+                    border: `1px solid ${colors.border}`,
+                    boxShadow: `0 10px 15px -3px ${colors.shadow}, 0 4px 6px -2px ${colors.shadow}`
+                  }}
+                >
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 md:gap-4">
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div 
+                        className="w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-white text-sm md:text-base"
+                        style={{ backgroundColor: colors.primary }}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <FaGripVertical 
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-sm md:text-base"
+                          style={{ color: colors.textMuted }}
+                        />
+                        <h3 className="text-lg md:text-xl font-medium" style={{ color: colors.text }}>
+                          {topic.title}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center sm:justify-end gap-1 md:gap-2">
+                      <button
+                        onClick={() => handleReorderTopics(topic.id, 'up')}
+                        disabled={index === 0}
+                        className={`p-2 md:p-3 rounded-full transition-all duration-200 ${
+                          index === 0 
+                            ? 'opacity-50 cursor-not-allowed' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 transform hover:scale-110'
+                        }`}
+                        style={{ color: colors.textMuted }}
+                        title="Move up"
+                      >
+                        <FaArrowUp className="text-sm md:text-base" />
+                      </button>
+                      <button
+                        onClick={() => handleReorderTopics(topic.id, 'down')}
+                        disabled={index === currentRoadmap.topics.length - 1}
+                        className={`p-2 md:p-3 rounded-full transition-all duration-200 ${
+                          index === currentRoadmap.topics.length - 1 
+                            ? 'opacity-50 cursor-not-allowed' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 transform hover:scale-110'
+                        }`}
+                        style={{ color: colors.textMuted }}
+                        title="Move down"
+                      >
+                        <FaArrowDown className="text-sm md:text-base" />
+                      </button>
+                      <button
+                        onClick={() => handleRemoveTopic(topic.id)}
+                        className="p-2 md:p-3 rounded-full transition-all duration-200 hover:bg-red-100 dark:hover:bg-red-900 transform hover:scale-110"
+                        style={{ color: '#EF4444' }}
+                        title="Remove topic"
+                      >
+                        <FaTrash className="text-sm md:text-base" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div 
+              variants={cardVariants}
+              className="text-center p-12 rounded-xl shadow-2xl mb-12"
+              style={{ 
+                backgroundColor: colors.cardBg,
+                border: `1px solid ${colors.border}`,
+                boxShadow: `0 20px 25px -5px ${colors.shadow}, 0 10px 10px -5px ${colors.shadow}`
+              }}
+            >
+              <h2 className="text-2xl font-semibold mb-4" style={{ color: colors.text }}>Your roadmap is empty</h2>
+              <p className="text-lg mb-6" style={{ color: colors.textMuted }}>
+                Start by adding topics to your custom learning roadmap. 
+              </p>
+            </motion.div>
+          )}
+
+          {currentRoadmap?.topics?.length > 0 && (
+            <motion.div variants={cardVariants} className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4 justify-center">
               {isEditing ? (
                 <button
                   onClick={handleUpdateRoadmap}
                   disabled={isUpdating}
-                  className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
+                  className={`px-6 md:px-8 py-3 md:py-4 rounded-lg flex items-center justify-center gap-2 md:gap-3 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 ${
                     isAuthenticated 
-                      ? 'bg-blue-600 hover:bg-blue-700' 
-                      : 'bg-gray-600 cursor-not-allowed'
+                      ? 'text-white' 
+                      : 'opacity-50 cursor-not-allowed'
                   }`}
+                  style={{ 
+                    backgroundColor: isAuthenticated ? colors.primary : colors.codeBg,
+                    boxShadow: isAuthenticated ? `0 4px 14px 0 ${colors.primary}40` : `0 4px 14px 0 ${colors.shadow}`
+                  }}
                   title={isAuthenticated ? 'Update your roadmap' : 'Log in to update roadmaps'}
                 >
                   {isUpdating ? (
                     <>
-                      <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></span>
-                      <span>Updating...</span>
+                      <span className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-white rounded-full border-t-transparent"></span>
+                      <span className="text-sm md:text-base">Updating...</span>
                     </>
                   ) : (
                     <>
-                      <FaEdit />
-                      <span>Update Roadmap</span>
+                      <FaEdit className="text-base md:text-lg" />
+                      <span className="text-sm md:text-base">Update Roadmap</span>
                     </>
                   )}
                 </button>
               ) : (
-              <button
-                onClick={handleSaveRoadmap}
-                disabled={isSaving}
-                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
-                  isAuthenticated 
-                    ? 'bg-green-600 hover:bg-green-700' 
-                    : 'bg-gray-600 cursor-not-allowed'
-                }`}
-                title={isAuthenticated ? 'Save your roadmap' : 'Log in to save roadmaps'}
-              >
-                {isSaving ? (
-                  <>
-                    <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></span>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaSave />
-                    <span>Save Roadmap</span>
-                  </>
-                )}
-              </button>
-              )}
-
-              <button
-                onClick={handleExport}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 transition-colors"
-              >
-                Export as JSON
-              </button>
-              
-              <button
-                onClick={() => navigate('/my-roadmaps')}
-                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center gap-2 transition-colors"
-              >
-                Back to My Roadmaps
-              </button>
-
-              {isEditing && (
                 <button
-                  onClick={handleStartFresh}
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-2 transition-colors"
+                  onClick={handleSaveRoadmap}
+                  disabled={isSaving}
+                  className={`px-6 md:px-8 py-3 md:py-4 rounded-lg flex items-center justify-center gap-2 md:gap-3 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 ${
+                    isAuthenticated 
+                      ? 'text-white' 
+                      : 'opacity-50 cursor-not-allowed'
+                  }`}
+                  style={{ 
+                    backgroundColor: isAuthenticated ? colors.primary : colors.codeBg,
+                    boxShadow: isAuthenticated ? `0 4px 14px 0 ${colors.primary}40` : `0 4px 14px 0 ${colors.shadow}`
+                  }}
+                  title={isAuthenticated ? 'Save your roadmap' : 'Log in to save roadmaps'}
                 >
-                  <FaPlus className="mr-1" /> Create New Roadmap
+                  {isSaving ? (
+                    <>
+                      <span className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-white rounded-full border-t-transparent"></span>
+                      <span className="text-sm md:text-base">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaSave className="text-base md:text-lg" />
+                      <span className="text-sm md:text-base">Save Roadmap</span>
+                    </>
+                  )}
                 </button>
               )}
+
+              <button
+                onClick={() => navigate('/my-roadmaps')}
+                className="px-6 md:px-8 py-3 md:py-4 rounded-lg flex items-center justify-center gap-2 md:gap-3 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                style={{ 
+                  backgroundColor: colors.codeBg,
+                  color: colors.text,
+                  border: `1px solid ${colors.border}`,
+                  boxShadow: `0 4px 14px 0 ${colors.shadow}`
+                }}
+              >
+                <span className="text-sm md:text-base">Back to My Roadmaps</span>
+              </button>
               
               {!isAuthenticated && (
                 <Link
                   to="/login"
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-2 transition-colors"
+                  className="px-6 md:px-8 py-3 md:py-4 rounded-lg flex items-center justify-center gap-2 md:gap-3 transition-all duration-200 font-medium text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                  style={{ 
+                    backgroundColor: colors.primary,
+                    boxShadow: `0 4px 14px 0 ${colors.primary}40`
+                  }}
                 >
-                  Login to Save
+                  <span className="text-sm md:text-base">Login to Save</span>
                 </Link>
               )}
-            </div>
+            </motion.div>
+          )}
 
-            {!isAuthenticated && (
-              <p className="mt-4 text-gray-400 text-sm">
+          {!isAuthenticated && currentRoadmap?.topics?.length > 0 && (
+            <motion.div variants={cardVariants} className="mt-6 text-center">
+              <p className="text-sm" style={{ color: colors.textMuted }}>
                 Note: You need to be logged in to save roadmaps to your account.
               </p>
-            )}
-          </div>
-        )}
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
   );

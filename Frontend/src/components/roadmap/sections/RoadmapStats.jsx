@@ -28,6 +28,52 @@ const RoadmapStats = ({
 }) => {
   if (!roadmap || !roadmap.sections) return null;
   
+  // Helper function to get unique videos across the entire roadmap
+  const getUniqueVideosInRoadmap = () => {
+    if (!roadmap?.sections) return [];
+    
+    const uniqueVideos = [];
+    const seenUrls = new Set();
+    
+    roadmap.sections.forEach(section => {
+      if (section.topics) {
+        section.topics.forEach(topic => {
+          if (topic.video?.videos) {
+            topic.video.videos.forEach(video => {
+              if (video.url && !seenUrls.has(video.url)) {
+                seenUrls.add(video.url);
+                uniqueVideos.push(video);
+              } else if (!video.url) {
+                // If no URL, use ID to avoid duplicates
+                const videoId = video.id || video._id;
+                if (videoId && !seenUrls.has(videoId)) {
+                  seenUrls.add(videoId);
+                  uniqueVideos.push(video);
+                }
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return uniqueVideos;
+  };
+
+  // Helper function to count unique completed videos across the entire roadmap
+  const getUniqueCompletedVideosCount = () => {
+    const uniqueVideos = getUniqueVideosInRoadmap();
+    let count = 0;
+    
+    uniqueVideos.forEach(video => {
+      if (completedVideos[video.id] || completedVideos[video._id]) {
+        count++;
+      }
+    });
+    
+    return count;
+  };
+  
   // Calculate total duration of all videos
   const calculateTotalDuration = () => {
     let totalSeconds = 0;
@@ -81,38 +127,69 @@ const RoadmapStats = ({
     return counts;
   };
   
-  // Count total videos in a section
+  // Count total videos in a section (unique videos only)
   const getTotalVideosCount = (section) => {
     if (!section?.topics) return 0;
     
-    let count = 0;
-    section.topics.forEach(topic => {
-      if (topic.video?.videos) {
-        count += topic.video.videos.length;
-      }
-    });
+    const uniqueVideos = [];
+    const seenUrls = new Set();
     
-    return count;
-  };
-  
-  // Count completed videos in a section
-  const getCompletedVideosCount = (section) => {
-    if (!section?.topics) return 0;
-    
-    let count = 0;
     section.topics.forEach(topic => {
       if (topic.video?.videos) {
         topic.video.videos.forEach(video => {
-          if (completedVideos[video.id] || completedVideos[video._id]) {
-            count++;
+          if (video.url && !seenUrls.has(video.url)) {
+            seenUrls.add(video.url);
+            uniqueVideos.push(video);
+          } else if (!video.url) {
+            // If no URL, use ID to avoid duplicates
+            const videoId = video.id || video._id;
+            if (videoId && !seenUrls.has(videoId)) {
+              seenUrls.add(videoId);
+              uniqueVideos.push(video);
+            }
           }
         });
       }
     });
     
-    return count;
+    return uniqueVideos.length;
   };
   
+  // Count completed videos in a section (unique videos only)
+  const getCompletedVideosCount = (section) => {
+    if (!section?.topics) return 0;
+    
+    const uniqueVideos = [];
+    const seenUrls = new Set();
+    
+    section.topics.forEach(topic => {
+      if (topic.video?.videos) {
+        topic.video.videos.forEach(video => {
+          if (video.url && !seenUrls.has(video.url)) {
+            seenUrls.add(video.url);
+            uniqueVideos.push(video);
+          } else if (!video.url) {
+            // If no URL, use ID to avoid duplicates
+            const videoId = video.id || video._id;
+            if (videoId && !seenUrls.has(videoId)) {
+              seenUrls.add(videoId);
+              uniqueVideos.push(video);
+            }
+          }
+        });
+      }
+    });
+    
+    let count = 0;
+    uniqueVideos.forEach(video => {
+      if (completedVideos[video.id] || completedVideos[video._id]) {
+        count++;
+      }
+    });
+    
+    return count;
+  };
+
   // Count total videos with notes
   const getNotesCount = () => {
     return Object.keys(videoNotes || {}).length;
@@ -148,12 +225,11 @@ const RoadmapStats = ({
   // Get section status counts
   const sectionCounts = getSectionStatusCounts();
   
-  // Get total videos count
-  const totalVideos = roadmap.sections.reduce((total, section) => 
-    total + getTotalVideosCount(section), 0);
+  // Get total videos count (unique videos only)
+  const totalVideos = getUniqueVideosInRoadmap().length;
   
-  // Get completed videos count
-  const completedCount = Object.keys(completedVideos).length;
+  // Get completed videos count (unique videos only)
+  const completedCount = getUniqueCompletedVideosCount();
   
   // Calculate completion percentage
   const completionPercentage = totalVideos > 0 

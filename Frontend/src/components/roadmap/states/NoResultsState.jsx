@@ -2,7 +2,7 @@ import React from 'react';
 import { FaSearch } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
-const NoResultsState = ({ onClearFilters }) => {
+const NoResultsState = ({ onClearFilters, theme }) => {
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -14,26 +14,45 @@ const NoResultsState = ({ onClearFilters }) => {
 
   return (
     <motion.div
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center"
+      style={{
+        background: theme.cardBg,
+        borderColor: theme.border,
+        color: theme.text
+      }}
+      className="rounded-xl shadow-sm border p-8 text-center"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
-      <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-        <FaSearch className="text-2xl text-gray-400 dark:text-gray-500" />
+      <div 
+        style={{ background: theme.background }}
+        className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4"
+      >
+        <FaSearch style={{ color: theme.textMuted }} className="text-2xl" />
       </div>
       
-      <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+      <h3 
+        style={{ color: theme.text }}
+        className="text-xl font-semibold mb-2"
+      >
         No matching roadmaps found
       </h3>
       
-      <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+      <p 
+        style={{ color: theme.textMuted }}
+        className="mb-6 max-w-md mx-auto"
+      >
         We couldn't find any roadmaps matching your current filters. Try adjusting your search criteria or clear all filters.
       </p>
       
       <button
         onClick={onClearFilters}
-        className="inline-flex items-center justify-center px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+        style={{ 
+          background: theme.background,
+          color: theme.text,
+          borderColor: theme.border
+        }}
+        className="inline-flex items-center justify-center px-4 py-2 rounded-lg border hover:opacity-80 transition-opacity"
       >
         Clear All Filters
       </button>

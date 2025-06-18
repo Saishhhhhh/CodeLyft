@@ -55,10 +55,10 @@ const AuthModal = ({ isOpen, onClose, prompt }) => {
 
         {/* Modal content */}
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-6">MuftCode</h2>
+          <h2 className="text-2xl font-bold mb-6">CodeLyft</h2>
           
           <p className="mb-8 text-gray-700">
-            To use MuftCode you must log into an existing account or
+            To use CodeLyft you must log into an existing account or
             create one using one of the options below
           </p>
           
@@ -99,7 +99,7 @@ const AuthModal = ({ isOpen, onClose, prompt }) => {
           </div>
           
           <p className="mt-8 text-xs text-gray-500">
-            By using MuftCode, you agree to the collection of usage
+            By using CodeLyft, you agree to the collection of usage
             data for analytics.
           </p>
         </div>

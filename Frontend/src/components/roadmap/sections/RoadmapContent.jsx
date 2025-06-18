@@ -93,52 +93,52 @@ const RoadmapContent = ({
           const isExpanded = Boolean(expandedSections[sectionId]);
           
           return (
-            <motion.div 
+          <motion.div 
               key={sectionId}
-              className="rounded-lg overflow-hidden"
-              initial="hidden"
-              animate="visible"
-              variants={sectionVariants}
-              transition={{ 
-                duration: 0.5,
+            className="rounded-lg overflow-hidden"
+            initial="hidden"
+            animate="visible"
+            variants={sectionVariants}
+            transition={{ 
+              duration: 0.5,
                 delay: sectionIndex * 0.15
-              }}
-              style={{ 
-                border: `1px solid ${theme.border}`,
-                backgroundColor: theme.cardBg
-              }}
-            >
-              {/* Section Header */}
-              <SectionHeader
+            }}
+            style={{ 
+              border: `1px solid ${theme.border}`,
+              backgroundColor: theme.cardBg
+            }}
+          >
+            {/* Section Header */}
+            <SectionHeader
                 key={`header-${sectionId}`}
                 sectionId={sectionId}
-                title={section.title.replace(/^Step \d+: /, '')}
-                completedCount={getCompletedVideosCount(section, completedVideos)}
-                totalCount={getTotalVideosCount(section)}
-                completionPercentage={getCompletionPercentage(section, completedVideos)}
+              title={section.title.replace(/^Step \d+: /, '')}
+              completedCount={getCompletedVideosCount(section, completedVideos)}
+              totalCount={getTotalVideosCount(section)}
+              completionPercentage={getCompletionPercentage(section, completedVideos)}
                 isExpanded={isExpanded}
                 onToggle={handleSectionToggle}
-                theme={theme}
-              />
+              theme={theme}
+            />
 
-              {/* Section Content with AnimatePresence for clean mounting/unmounting */}
-              <AnimatePresence initial={false}>
+            {/* Section Content with AnimatePresence for clean mounting/unmounting */}
+            <AnimatePresence initial={false}>
                 {isExpanded && (
-                  <motion.div 
-                    className="overflow-hidden" 
+                <motion.div 
+                  className="overflow-hidden" 
                     key={`content-${sectionId}`}
-                    variants={contentVariants}
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    style={{ backgroundColor: theme.cardBg }}
-                  >
-                    <div className="p-6">
-                      {/* Topics - Using CSS grid with defined height to prevent layout shifts */}
-                      <div className="grid grid-cols-1 gap-8 overflow-visible">
+                  variants={contentVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  style={{ backgroundColor: theme.cardBg }}
+                >
+                  <div className="p-6">
+                    {/* Topics - Using CSS grid with defined height to prevent layout shifts */}
+                    <div className="grid grid-cols-1 gap-8 overflow-visible">
                         {section.topics?.map((topic, topicIndex) => {
-                          // Process video data to ensure channel info is available
-                          if (topic.video && topic.video.videos && topic.video.videos.length > 0) {
+                        // Process video data to ensure channel info is available
+                        if (topic.video && topic.video.videos && topic.video.videos.length > 0) {
                             // Log the original channel information for debugging
                             console.log('Video channel info before processing:', {
                               topicChannel: topic.video.channel,
@@ -153,13 +153,13 @@ const RoadmapContent = ({
                             // Get source information from either the video or topic
                             const sourceInfo = topic.video.videos[0]?.source || 'YouTube';
                             
-                            // Fix channel information for each video
-                            topic.video.videos.forEach(video => {
+                          // Fix channel information for each video
+                          topic.video.videos.forEach(video => {
                               // Check for channel information in different places
                               if (!video.channel) {
                                 // Try to get channel from topic
                                 if (topic.video.channel) {
-                                  video.channel = topic.video.channel;
+                              video.channel = topic.video.channel;
                                 } 
                                 // Try to get source as fallback
                                 else if (video.source) {
@@ -173,7 +173,7 @@ const RoadmapContent = ({
                               // Handle object-type channel
                               else if (typeof video.channel === 'object') {
                                 if (video.channel?.name) {
-                                  video.channel = video.channel.name;
+                              video.channel = video.channel.name;
                                 } else {
                                   video.channel = sourceInfo;
                                 }
@@ -182,11 +182,11 @@ const RoadmapContent = ({
                               // Ensure we never display "Unknown"
                               if (!video.channel || video.channel === 'Unknown') {
                                 video.channel = sourceInfo;
-                              }
-                            });
-                            
-                            // Set playlist channel if missing
-                            if (!topic.video.channel && topic.video.videos[0]?.channel) {
+                            }
+                          });
+                          
+                          // Set playlist channel if missing
+                          if (!topic.video.channel && topic.video.videos[0]?.channel) {
                               topic.video.channel = topic.video.videos[0].channel;
                             }
                             
@@ -195,44 +195,44 @@ const RoadmapContent = ({
                               topicChannel: topic.video.channel,
                               videoChannels: topic.video.videos.map(v => v.channel)
                             });
-                          }
+                            }
                           
                           // Generate a stable topic ID
                           const topicId = topic.id || topic._id || `topic-${sectionId}-${topicIndex}`;
-                          
-                          return (
-                            <motion.div
+                        
+                        return (
+                          <motion.div
                               key={topicId}
-                              custom={topicIndex}
-                              initial="hidden"
-                              animate="visible"
-                              variants={topicVariants}
-                              className="overflow-visible"
-                              style={{ 
-                                willChange: 'transform, opacity',
-                                contain: 'paint'
-                              }}
-                            >
-                              <TopicSection
+                            custom={topicIndex}
+                            initial="hidden"
+                            animate="visible"
+                            variants={topicVariants}
+                            className="overflow-visible"
+                            style={{ 
+                              willChange: 'transform, opacity',
+                              contain: 'paint'
+                            }}
+                          >
+                            <TopicSection
                                 key={`topic-section-${topicId}`}
-                                topic={topic}
-                                completedVideos={completedVideos}
-                                videoNotes={videoNotes}
-                                onToggleComplete={onToggleVideoComplete}
-                                onPlayVideo={onPlayVideo}
-                                onAddNote={onAddNote}
-                                onPlaylistClick={onPlaylistClick}
-                                theme={theme}
-                              />
-                            </motion.div>
-                          );
-                        })}
-                      </div>
+                              topic={topic}
+                              completedVideos={completedVideos}
+                              videoNotes={videoNotes}
+                              onToggleComplete={onToggleVideoComplete}
+                              onPlayVideo={onPlayVideo}
+                              onAddNote={onAddNote}
+                              onPlaylistClick={onPlaylistClick}
+                              theme={theme}
+                            />
+                          </motion.div>
+                        );
+                      })}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
           );
         })}
       </div>

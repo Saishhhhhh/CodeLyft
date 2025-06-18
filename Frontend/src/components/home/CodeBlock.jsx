@@ -25,7 +25,7 @@ const CodeBlock = ({ colors, darkMode }) => {
           <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
         </div>
-        <div className="ml-4 text-sm font-medium" style={{ color: colors.textMuted }}>muftcode.js</div>
+        <div className="ml-4 text-sm font-medium" style={{ color: colors.textMuted }}>codelyft.js</div>
       </div>
       <div className="p-6">
         <div className="mb-2">
@@ -33,7 +33,7 @@ const CodeBlock = ({ colors, darkMode }) => {
           <span style={{ color: syntaxColors.variable }}> learningPath </span>
           <span style={{ color: syntaxColors.keyword }}>=</span>
           <span style={{ color: syntaxColors.keyword }}> await</span>
-          <span style={{ color: syntaxColors.variable }}> MuftCode.</span>
+          <span style={{ color: syntaxColors.variable }}> CodeLyft.</span>
           <span style={{ color: syntaxColors.function }}>generate</span>
           <span style={{ color: syntaxColors.punctuation }}>(</span>
           <span style={{ color: syntaxColors.string }}>'your learning goal'</span>

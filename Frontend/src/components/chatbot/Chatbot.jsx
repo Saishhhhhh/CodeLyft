@@ -56,7 +56,7 @@ const Chatbot = () => {
     <div className={`fixed bottom-6 right-6 bg-gray-800 rounded-lg shadow-xl z-50 transition-all duration-300 ${minimized ? 'w-64' : 'w-80 sm:w-96'}`}>
       {/* Chatbot header */}
       <div className="flex items-center justify-between bg-purple-600 p-3 rounded-t-lg">
-        <h3 className="text-white font-medium">MuftCode Assistant</h3>
+        <h3 className="text-white font-medium">CodeLyft Assistant</h3>
         <div className="flex space-x-2">
           {/* Minimize/Expand button */}
           <button 

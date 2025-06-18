@@ -52,23 +52,23 @@ import RoadmapStats from '../components/roadmap/sections/RoadmapStats';
 const useRoadmapTheme = (darkMode = false) => {
   return {
     // Primary and accent colors - Exactly matching HomePage
-    primary: darkMode ? '#4F46E5' : '#4F46E5', // Indigo - main brand color
-    secondary: darkMode ? '#DA2C38' : '#DA2C38', // YouTube Red - accent color
-    accent: darkMode ? '#8B5CF6' : '#8B5CF6', // Purple - complementary accent
+    primary: darkMode ? '#6366F1' : '#4F46E5', // Indigo - main brand color
+    secondary: darkMode ? '#F43F5E' : '#DA2C38', // YouTube Red - accent color
+    accent: darkMode ? '#A78BFA' : '#8B5CF6', // Purple - complementary accent
     
     // Background colors - Exactly matching HomePage
-    background: darkMode ? '#111827' : '#F9F9F9', // Dark Gray / Light Gray
+    background: darkMode ? '#0F172A' : '#F9F9F9', // Dark blue-black / Light Gray
     cardBg: darkMode ? '#1E293B' : '#FFFFFF', // Darker background / White
     
     // Text colors - Exactly matching HomePage
-    text: darkMode ? '#F9F9F9' : '#111827', // Light Gray / Dark Gray
-    textMuted: darkMode ? '#94A3B8' : '#6B7280', // Light gray / Medium gray
+    text: darkMode ? '#F1F5F9' : '#111827', // Light Gray / Dark Gray
+    textMuted: darkMode ? '#CBD5E1' : '#6B7280', // Light gray / Medium gray
     
     // UI elements - Exactly matching HomePage
-    border: darkMode ? '#334155' : '#E5E7EB', // Medium-dark gray / Light gray
-    codeBg: darkMode ? '#0F172A' : '#F3F4F6', // Dark blue-black / Light gray
-    codeText: darkMode ? '#4F46E5' : '#4F46E5', // Indigo for consistency
-    shadow: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)', // Shadows
+    border: darkMode ? '#475569' : '#E5E7EB', // Medium-dark gray / Light gray
+    codeBg: darkMode ? '#1E293B' : '#F3F4F6', // Dark blue-black / Light gray
+    codeText: darkMode ? '#93C5FD' : '#4F46E5', // Light blue / Indigo
+    shadow: darkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.1)', // Shadows
     
     // Status colors
     success: '#10B981', // Green
@@ -77,28 +77,28 @@ const useRoadmapTheme = (darkMode = false) => {
     info: '#3B82F6', // Blue
     
     // Progress colors
-    progressBg: darkMode ? '#1F2937' : '#F3F4F6',
-    progressFill: '#4F46E5',
-    progressText: darkMode ? '#F9F9F9' : '#111827',
+    progressBg: darkMode ? '#1E293B' : '#F3F4F6',
+    progressFill: darkMode ? '#818CF8' : '#4F46E5',
+    progressText: darkMode ? '#F1F5F9' : '#111827',
     
     // Button colors
-    buttonPrimary: '#4F46E5',
-    buttonSecondary: '#8B5CF6',
+    buttonPrimary: darkMode ? '#6366F1' : '#4F46E5',
+    buttonSecondary: darkMode ? '#A78BFA' : '#8B5CF6',
     buttonText: '#FFFFFF',
-    buttonHover: darkMode ? '#4338CA' : '#4338CA',
+    buttonHover: darkMode ? '#4F46E5' : '#4338CA',
     
     // Modal colors
     modalBg: darkMode ? '#1E293B' : '#FFFFFF',
     modalOverlay: darkMode ? 'rgba(0, 0, 0, 0.75)' : 'rgba(0, 0, 0, 0.5)',
     
     // Card colors
-    cardBorder: darkMode ? '#334155' : '#E5E7EB',
-    cardHover: darkMode ? '#2D3748' : '#F9FAFB',
+    cardBorder: darkMode ? '#475569' : '#E5E7EB',
+    cardHover: darkMode ? '#334155' : '#F9FAFB',
     
     // Animation colors
-    animationPrimary: '#4F46E5',
-    animationSecondary: '#8B5CF6',
-    animationAccent: '#DA2C38'
+    animationPrimary: darkMode ? '#6366F1' : '#4F46E5',
+    animationSecondary: darkMode ? '#A78BFA' : '#8B5CF6',
+    animationAccent: darkMode ? '#F43F5E' : '#DA2C38'
   };
 };
 
@@ -194,6 +194,15 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
             response = await getRoadmap(id);
           } catch (fetchError) {
             console.error(`Error fetching roadmap:`, fetchError);
+            
+            // Check if this is a 404 error (roadmap not found)
+            if (fetchError.response && fetchError.response.status === 404) {
+              // Handle the case where the roadmap doesn't exist
+              setError('Roadmap not found. It may have been deleted or you don\'t have access to it.');
+              setLoading(false);
+              return;
+            }
+            
             setError('Failed to load the roadmap. Please try again.');
             setLoading(false);
             return;
@@ -553,10 +562,22 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
         return;
       }
       
+      // Find the actual video object to get its URL
+      const video = parentTopic.topics[0]?.video?.videos?.find(v => 
+        v.id === videoId || v._id === videoId
+      );
+      
+      if (!video) {
+        console.error(`Could not find video with ID: ${videoId}`);
+        toast.error('Error updating progress: Could not find the video');
+        return;
+      }
+      
       // Toggle completion status
       const newCompletedVideos = { ...completedVideos };
+      const isCurrentlyCompleted = newCompletedVideos[videoId];
       
-      if (newCompletedVideos[videoId]) {
+      if (isCurrentlyCompleted) {
         delete newCompletedVideos[videoId];
         // Show notification for unmarking a video as completed
         toast.success('Video marked as not completed', {
@@ -572,37 +593,57 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
         });
       }
       
-      setCompletedVideos(newCompletedVideos);
-      
-      // Count completed videos for this topic
-      const topicId = parentTopic._id;
-      const topic = roadmap.sections.find(section => section._id === topicId);
-      
-      if (!topic || !topic.topics || !topic.topics[0] || !topic.topics[0].video || !topic.topics[0].video.videos) {
-        console.error('Invalid topic structure');
-        return;
+      // Handle shared resources - find all videos with the same URL across all topics
+      if (video.url) {
+        const sharedVideoIds = [];
+        
+        roadmap.sections.forEach(section => {
+          if (section.topics && section.topics[0]?.video?.videos) {
+            section.topics[0].video.videos.forEach(v => {
+              if (v.url === video.url) {
+                // Use the same ID format as the original video
+                const sharedVideoId = v.id || v._id;
+                if (sharedVideoId) {
+                  sharedVideoIds.push(sharedVideoId);
+                  
+                  // Update completion status for all shared videos
+                  if (isCurrentlyCompleted) {
+                    delete newCompletedVideos[sharedVideoId];
+                  } else {
+                    newCompletedVideos[sharedVideoId] = true;
+                  }
+                }
+              }
+            });
+          }
+        });
+        
+        if (sharedVideoIds.length > 1) {
+          console.log(`Found ${sharedVideoIds.length} shared videos with URL: ${video.url}`);
+          console.log('Shared video IDs:', sharedVideoIds);
+        }
       }
       
-      const allTopicVideos = topic.topics[0].video.videos;
-      const totalVideos = allTopicVideos.length;
-      let completedCount = 0;
+      setCompletedVideos(newCompletedVideos);
       
-      // Count how many videos in this topic are marked as completed
-      allTopicVideos.forEach(video => {
-        if (newCompletedVideos[video.id] || newCompletedVideos[video._id]) {
-          completedCount++;
-        }
-      });
-      
-      console.log(`Topic ${topic.title}: ${completedCount}/${totalVideos} videos completed`);
-      
-      // Update topic progress status
-      const newProgress = completedCount === 0 ? 'not-started' : 
-                          completedCount === totalVideos ? 'completed' : 'in-progress';
-      
-      // Update roadmap state with new progress
+      // Update all affected topics
       const updatedSections = roadmap.sections.map(section => {
-        if (section._id === topicId) {
+        if (section.topics && section.topics[0]?.video?.videos) {
+          const allTopicVideos = section.topics[0].video.videos;
+          const totalVideos = allTopicVideos.length;
+          let completedCount = 0;
+          
+          // Count how many videos in this topic are marked as completed
+          allTopicVideos.forEach(video => {
+            if (newCompletedVideos[video.id] || newCompletedVideos[video._id]) {
+              completedCount++;
+            }
+          });
+          
+          // Update topic progress status
+          const newProgress = completedCount === 0 ? 'not-started' : 
+                              completedCount === totalVideos ? 'completed' : 'in-progress';
+          
           return {
             ...section,
             progress: newProgress
@@ -617,14 +658,18 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
         sections: updatedSections
       }));
       
-      // Save to server
+      // Save to server - send all completed resource IDs
       const completedResourceIds = Object.keys(newCompletedVideos).filter(id => newCompletedVideos[id]);
       
-      // Format data for the API
+      // Get unique total resources count (avoiding duplicates for shared resources)
+      const uniqueTotalResources = getUniqueVideosInRoadmap(roadmap).length;
+      const uniqueCompletedResources = getUniqueCompletedVideosCount(roadmap, newCompletedVideos);
+      
+      // Format data for the API - use the original topic ID
       const updateData = {
-        topicId: topicId,
-        completedResources: completedCount,
-        totalResources: totalVideos,
+        topicId: parentTopic._id,
+        completedResources: uniqueCompletedResources, // Use unique count
+        totalResources: uniqueTotalResources, // Use unique count
         completedResourceIds: completedResourceIds
       };
       
@@ -650,7 +695,7 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
           console.log('Saving progress locally as fallback');
           saveRoadmapProgress({
             roadmapId: id,
-            topicId: topicId,
+            topicId: parentTopic._id,
             videoId: videoId,
             isCompleted: newCompletedVideos[videoId] || false
           });
@@ -745,17 +790,14 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
   const getCompletionPercentage = (section, completedVideos) => {
     if (!section?.topics) return 0;
     
-    let totalVideos = 0;
+    // Get unique videos for this section
+    const uniqueVideos = getUniqueVideosInSection(section);
+    const totalVideos = uniqueVideos.length;
     let completedCount = 0;
     
-    section.topics.forEach(topic => {
-      if (topic.video?.videos) {
-        topic.video.videos.forEach(video => {
-          totalVideos++;
-          if (completedVideos[video.id]) {
-            completedCount++;
-          }
-        });
+    uniqueVideos.forEach(video => {
+      if (completedVideos[video.id] || completedVideos[video._id]) {
+        completedCount++;
       }
     });
     
@@ -766,14 +808,13 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
   const getCompletedVideosCount = (section, completedVideos) => {
     if (!section?.topics) return 0;
     
+    // Get unique videos for this section
+    const uniqueVideos = getUniqueVideosInSection(section);
     let count = 0;
-    section.topics.forEach(topic => {
-      if (topic.video?.videos) {
-        topic.video.videos.forEach(video => {
-          if (completedVideos[video.id]) {
-            count++;
-          }
-        });
+    
+    uniqueVideos.forEach(video => {
+      if (completedVideos[video.id] || completedVideos[video._id]) {
+        count++;
       }
     });
     
@@ -783,10 +824,81 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
   const getTotalVideosCount = (section) => {
     if (!section?.topics) return 0;
     
-    let count = 0;
+    // Get unique videos for this section
+    const uniqueVideos = getUniqueVideosInSection(section);
+    return uniqueVideos.length;
+  };
+
+  // Helper function to get unique videos in a section (avoiding duplicates for shared resources)
+  const getUniqueVideosInSection = (section) => {
+    if (!section?.topics) return [];
+    
+    const uniqueVideos = [];
+    const seenUrls = new Set();
+    
     section.topics.forEach(topic => {
       if (topic.video?.videos) {
-        count += topic.video.videos.length;
+        topic.video.videos.forEach(video => {
+          if (video.url && !seenUrls.has(video.url)) {
+            seenUrls.add(video.url);
+            uniqueVideos.push(video);
+          } else if (!video.url) {
+            // If no URL, use ID to avoid duplicates
+            const videoId = video.id || video._id;
+            if (videoId && !seenUrls.has(videoId)) {
+              seenUrls.add(videoId);
+              uniqueVideos.push(video);
+            }
+          }
+        });
+      }
+    });
+    
+    return uniqueVideos;
+  };
+
+  // Helper function to get unique videos across the entire roadmap
+  const getUniqueVideosInRoadmap = (roadmap) => {
+    if (!roadmap?.sections) return [];
+    
+    const uniqueVideos = [];
+    const seenUrls = new Set();
+    
+    roadmap.sections.forEach(section => {
+      if (section.topics) {
+        section.topics.forEach(topic => {
+          if (topic.video?.videos) {
+            topic.video.videos.forEach(video => {
+              if (video.url && !seenUrls.has(video.url)) {
+                seenUrls.add(video.url);
+                uniqueVideos.push(video);
+              } else if (!video.url) {
+                // If no URL, use ID to avoid duplicates
+                const videoId = video.id || video._id;
+                if (videoId && !seenUrls.has(videoId)) {
+                  seenUrls.add(videoId);
+                  uniqueVideos.push(video);
+                }
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return uniqueVideos;
+  };
+
+  // Helper function to count unique completed videos across the entire roadmap
+  const getUniqueCompletedVideosCount = (roadmap, completedVideos) => {
+    if (!roadmap?.sections) return 0;
+    
+    const uniqueVideos = getUniqueVideosInRoadmap(roadmap);
+    let count = 0;
+    
+    uniqueVideos.forEach(video => {
+      if (completedVideos[video.id] || completedVideos[video._id]) {
+        count++;
       }
     });
     
@@ -1199,7 +1311,7 @@ const RoadmapProgressPage = ({ fromSaved = false }) => {
       />
       
       {/* Roadmap Statistics */}
-      <div className="container mx-auto px-4 pt-10 xl:pt-24 xxl:pt-1">
+      <div className="container mx-auto px-4 pt-6 xl:pt-16 xxl:pt-1">
         <RoadmapStats 
           roadmap={roadmap}
           completedVideos={completedVideos}

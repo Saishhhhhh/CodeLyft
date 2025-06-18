@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="248" fill="#F3F4F6" stroke="#E5E7EB" stroke-width="16"/>
+  
+  <!-- Code brackets representing technology -->
+  <path d="M192 144L112 256L192 368" stroke="#6B7280" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M320 144L400 256L320 368" stroke="#6B7280" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M272 112L240 400" stroke="#6B7280" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> 

@@ -314,6 +314,66 @@ const saveRoadmapLocally = (roadmapData) => {
   }
 };
 
+/**
+ * Save a roadmap to the database with duplicate prevention
+ * @param {Object} roadmapData - The roadmap data to save
+ * @returns {Promise<Object>} Result of the save operation
+ */
+export const saveRoadmapToDatabase = async (roadmapData) => {
+  try {
+    console.log('Attempting to save roadmap to database');
+    
+    // Double-check authentication status
+    const authStatus = await checkAuth();
+    
+    if (!authStatus.isAuthenticated) {
+      console.warn('Auth check failed: User not authenticated, cannot save roadmap');
+      throw new Error('Please log in to save your roadmap to your account');
+    }
+
+    console.log('Auth check passed, user authenticated:', authStatus.isAuthenticated);
+    console.log('User ID:', authStatus.user?._id);
+    
+    // Make sure we preserve the isCustom flag
+    const roadmapToSave = {
+      ...roadmapData,
+      isCustom: roadmapData.isCustom || false
+    };
+    
+    // Try to save using the main service function
+    try {
+      const savedRoadmap = await saveGeneratedRoadmap(roadmapToSave);
+      console.log('Roadmap saved to database:', savedRoadmap);
+      
+      // Handle the case where the service detected and prevented a duplicate save
+      if (savedRoadmap?.data?.duplicate) {
+        console.log('Duplicate save was prevented by the service');
+        return { success: true, duplicate: true, data: savedRoadmap.data };
+      }
+      
+      return savedRoadmap;
+    } catch (innerError) {
+      console.error('Inner error saving roadmap:', innerError);
+      
+      // More specific error handling
+      if (innerError.response?.status === 401) {
+        throw new Error('Authentication expired. Please log in again.');
+      } else if (innerError.response?.status === 403) {
+        throw new Error('Permission denied. You cannot save this roadmap.');
+      } else if (innerError.response?.status >= 500) {
+        throw new Error('Server error. Your roadmap cannot be saved at this time.');
+      } else {
+        throw new Error('Failed to save to database.');
+      }
+    }
+  } catch (saveError) {
+    console.error('Error saving roadmap to database:', saveError);
+    console.error('Error response:', saveError.response?.data);
+    
+    throw saveError;
+  }
+};
+
 // Get all roadmaps for the current user
 export const getUserRoadmaps = async () => {
   try {
@@ -363,10 +423,19 @@ export const getCompletedVideos = () => {
 // Get a single roadmap with topics
 export const getRoadmap = async (roadmapId) => {
   try {
-    const response = await api.get(`/roadmaps/${roadmapId}`);
+    // Check for custom roadmap flag in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const isCustom = urlParams.get('isCustom') === 'true';
+    
+    // Determine which endpoint to use
+    const endpoint = isCustom ? `/custom-roadmaps/${roadmapId}` : `/roadmaps/${roadmapId}`;
+    console.log(`Fetching roadmap from endpoint: ${endpoint}`);
+    
+    const response = await api.get(endpoint);
     return response.data;
   } catch (error) {
     console.error(`Error fetching roadmap ${roadmapId}:`, error);
+    // Re-throw the error to allow proper error handling upstream
     throw error;
   }
 };

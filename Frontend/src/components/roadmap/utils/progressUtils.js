@@ -73,14 +73,14 @@ export const groupSectionsBySharedResources = (sections) => {
       : section.video?.videos || [];
 
     videos.forEach(video => {
-      if (!resourcesByUrl.has(video.url)) {
-        resourcesByUrl.set(video.url, []);
-      }
-      resourcesByUrl.get(video.url).push({
-        sectionIndex,
-        sectionTitle: section.title,
+          if (!resourcesByUrl.has(video.url)) {
+            resourcesByUrl.set(video.url, []);
+          }
+          resourcesByUrl.get(video.url).push({
+            sectionIndex,
+            sectionTitle: section.title,
         topicTitle: section.topics ? section.title : section.title
-      });
+        });
     });
   });
   
@@ -100,11 +100,11 @@ export const groupSectionsBySharedResources = (sections) => {
       : section.video?.videos || [];
 
     videos.forEach(video => {
-      const sharedResources = resourcesByUrl.get(video.url);
-      if (sharedResources && sharedResources.length > 1) {
-        sharedResources.forEach(resource => {
-          if (resource.sectionIndex !== sectionIndex) {
-            sharedSections.add(resource.sectionIndex);
+          const sharedResources = resourcesByUrl.get(video.url);
+          if (sharedResources && sharedResources.length > 1) {
+            sharedResources.forEach(resource => {
+              if (resource.sectionIndex !== sectionIndex) {
+                sharedSections.add(resource.sectionIndex);
           }
         });
       }
@@ -141,7 +141,7 @@ export const groupSectionsBySharedResources = (sections) => {
               }
               return video;
             }) || []
-          }
+              }
         }],
         originalIndices: sharedSectionsArray
       };
@@ -175,7 +175,7 @@ export const groupSectionsBySharedResources = (sections) => {
               }
               return video;
             }) || []
-          }
+              }
         }],
         originalIndices: [sectionIndex]
       };

@@ -1848,7 +1848,7 @@ const checkRelevanceWithGroq = async (videoTitle, techName) => {
           'Authorization': `Bearer ${currentKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': window.location.origin,
-          'X-Title': 'MuftCode Learning Platform'
+          'X-Title': 'CodeLyft Learning Platform'
         },
         body: JSON.stringify({
           model: 'meta-llama/llama-3.3-70b-instruct',

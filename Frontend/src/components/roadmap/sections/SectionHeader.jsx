@@ -52,7 +52,12 @@ const SectionHeader = ({
     >
       <div className="flex flex-col">
         <div className="flex items-start justify-between mb-2">
-          <h2 className="text-xl font-semibold flex-1 pr-4" style={{ color: theme.text }}>
+          <h2 
+            className="text-xl font-semibold flex-1 pr-4 text-transparent bg-clip-text" 
+            style={{ 
+              backgroundImage: `linear-gradient(to right, ${theme.primary}, ${theme.accent})`,
+            }}
+          >
             {title}
           </h2>
           <div className="flex items-center space-x-3 mt-1 flex-shrink-0">
@@ -80,7 +85,7 @@ const SectionHeader = ({
             className="h-full transition-all duration-500"
             style={{ 
               width: `${completionPercentage}%`,
-              backgroundColor: theme.progressFill
+              background: `linear-gradient(to right, ${theme.primary}, ${theme.accent})`,
             }}
           />
         </div>

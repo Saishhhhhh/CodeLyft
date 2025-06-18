@@ -92,6 +92,12 @@ export const getCustomRoadmap = async (roadmapId) => {
   } catch (error) {
     console.error(`Error fetching custom roadmap ${roadmapId}:`, error);
     
+    // Check if this is a 404 error (roadmap not found)
+    if (error.response && error.response.status === 404) {
+      // Throw a more specific error for 404 cases
+      throw new Error('Custom roadmap not found');
+    }
+    
     // Try to find locally saved roadmap
     const localRoadmaps = getLocalCustomRoadmaps();
     const localRoadmap = localRoadmaps.find(r => r.id === roadmapId);

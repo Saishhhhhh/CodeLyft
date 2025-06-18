@@ -242,24 +242,24 @@ const MyRoadmapsPage = () => {
   const hasFilteredResults = filteredRegularRoadmaps.length > 0 || filteredCustomRoadmaps.length > 0;
   
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: theme.background }}>
       <Navbar />
       
-      <motion.main
+            <motion.main
         variants={pageVariants}
-        initial="hidden"
-        animate="visible"
-        className="container mx-auto px-4 py-8 pt-20"
+          initial="hidden"
+          animate="visible"
+        className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 pt-16 sm:pt-20"
       >
-        {/* Page Title */}
+        {/* Page Title - Made responsive */}
         <motion.div
           variants={sectionVariants}
-          className="mb-8"
+          className="mb-6 sm:mb-8"
         >
-          <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          <h1 style={{ color: theme.text }} className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">
             {user?.name ? `${user.name.split(' ')[0]}'s Roadmaps` : 'My Roadmaps'}
           </h1>
-          <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p style={{ color: theme.textMuted }} className="text-sm sm:text-base">
             Manage and track your learning journey
           </p>
         </motion.div>
@@ -273,41 +273,41 @@ const MyRoadmapsPage = () => {
         </motion.div>
 
         {/* Combined Filters and Stats Section */}
-        <motion.div variants={sectionVariants} className="mb-8">
-          <div className="rounded-xl border shadow-lg p-6" style={{ background: theme.cardBg, borderColor: theme.border }}>
-            {/* Stats Row */}
+        <motion.div variants={sectionVariants} className="mb-6 sm:mb-8">
+          <div className="rounded-xl border shadow-lg p-4 sm:p-6" style={{ background: theme.cardBg, borderColor: theme.border }}>
+                        {/* Stats Row - Made more responsive */}
             {hasRoadmaps && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-6">
                 {/* Total Roadmaps */}
-                <div className="flex items-center p-4 rounded-lg" style={{ background: theme.background }}>
-                  <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center mr-4">
-                    <FaRoad className="text-white text-xl" />
+                <div className="flex items-center p-3 sm:p-4 rounded-lg" style={{ background: theme.background }}>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-600 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+                    <FaRoad className="text-white text-base sm:text-xl" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: theme.textMuted }}>Total Roadmaps</p>
-                    <p className="text-2xl font-bold text-indigo-500">{roadmaps.length + savedRoadmaps.length}</p>
+            <div>
+                    <p className="text-xs sm:text-sm font-medium" style={{ color: theme.textMuted }}>Total Roadmaps</p>
+                    <p className="text-xl sm:text-2xl font-bold text-indigo-500">{roadmaps.length + savedRoadmaps.length}</p>
                   </div>
-                </div>
-
+            </div>
+            
                 {/* Custom Roadmaps */}
-                <div className="flex items-center p-4 rounded-lg" style={{ background: theme.background }}>
-                  <div className="w-10 h-10 bg-violet-600 rounded-full flex items-center justify-center mr-4">
-                    <FaPencilAlt className="text-white text-xl" />
+                <div className="flex items-center p-3 sm:p-4 rounded-lg" style={{ background: theme.background }}>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-violet-600 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+                    <FaPencilAlt className="text-white text-base sm:text-xl" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: theme.textMuted }}>Custom Roadmaps</p>
-                    <p className="text-2xl font-bold text-violet-500">{savedRoadmaps.length}</p>
+                    <p className="text-xs sm:text-sm font-medium" style={{ color: theme.textMuted }}>Custom</p>
+                    <p className="text-xl sm:text-2xl font-bold text-violet-500">{savedRoadmaps.length}</p>
                   </div>
-                </div>
+            </div>
 
                 {/* With Resources */}
-                <div className="flex items-center p-4 rounded-lg" style={{ background: theme.background }}>
-                  <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center mr-4">
-                    <FaYoutube className="text-white text-xl" />
+                <div className="flex items-center p-3 sm:p-4 rounded-lg" style={{ background: theme.background }}>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-600 rounded-full flex items-center justify-center mr-3 sm:mr-4">
+                    <FaYoutube className="text-white text-base sm:text-xl" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: theme.textMuted }}>With Resources</p>
-                    <p className="text-2xl font-bold text-green-500">
+                    <p className="text-xs sm:text-sm font-medium" style={{ color: theme.textMuted }}>With Resources</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-500">
                       {[...roadmaps, ...savedRoadmaps].filter(roadmap => 
                         roadmap.topics?.some(topic => 
                           (topic.hasGeneratedResources && topic.resources?.length > 0) || 
@@ -317,22 +317,22 @@ const MyRoadmapsPage = () => {
                     </p>
                   </div>
                 </div>
-              </div>
-            )}
+            </div>
+          )}
 
-            {/* Search and Filters */}
-            <div className="space-y-4">
+            {/* Search and Filters - Made responsive */}
+            <div className="space-y-3 sm:space-y-4">
               {/* Search Bar */}
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaSearch style={{ color: theme.textMuted }} />
+                <div className="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+                  <FaSearch style={{ color: theme.textMuted }} className="text-sm sm:text-base" />
                 </div>
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search roadmaps..."
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border"
+                  className="w-full text-sm sm:text-base pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 rounded-lg border"
                   style={{
                     background: theme.background,
                     borderColor: theme.border,
@@ -343,13 +343,13 @@ const MyRoadmapsPage = () => {
 
               {/* Sort Dropdown */}
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaSort style={{ color: theme.textMuted }} />
+                <div className="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+                  <FaSort style={{ color: theme.textMuted }} className="text-sm sm:text-base" />
                 </div>
                 <select
                   value={sortMethod}
                   onChange={(e) => setSortMethod(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border appearance-none"
+                  className="w-full text-sm sm:text-base pl-8 sm:pl-10 pr-8 py-2 rounded-lg border appearance-none"
                   style={{
                     background: theme.background,
                     borderColor: theme.border,
@@ -360,28 +360,28 @@ const MyRoadmapsPage = () => {
                   <option value="oldest">Oldest First</option>
                   <option value="progress">Progress</option>
                 </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <svg className="h-4 w-4" fill="none" stroke={theme.textMuted} viewBox="0 0 24 24">
+                <div className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center pointer-events-none">
+                  <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke={theme.textMuted} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
               </div>
 
-              {/* Tab Navigation */}
-              <div className="flex border-b" style={{ borderColor: theme.border }}>
+                            {/* Tab Navigation - Responsive */}
+              <div className="flex flex-wrap border-b" style={{ borderColor: theme.border }}>
                 <button
                   onClick={() => setActiveTab('all')}
-                  className={`px-4 py-2 font-medium ${activeTab === 'all' ? 'border-b-2' : ''}`}
+                  className={`px-3 py-2 text-sm sm:px-4 sm:text-base font-medium ${activeTab === 'all' ? 'border-b-2' : ''}`}
                   style={{
                     borderColor: activeTab === 'all' ? theme.primary : 'transparent',
                     color: activeTab === 'all' ? theme.primary : theme.textMuted
                   }}
                 >
-                  All Roadmaps
+                  All
                 </button>
                 <button
                   onClick={() => setActiveTab('regular')}
-                  className={`px-4 py-2 font-medium ${activeTab === 'regular' ? 'border-b-2' : ''}`}
+                  className={`px-3 py-2 text-sm sm:px-4 sm:text-base font-medium ${activeTab === 'regular' ? 'border-b-2' : ''}`}
                   style={{
                     borderColor: activeTab === 'regular' ? theme.primary : 'transparent',
                     color: activeTab === 'regular' ? theme.primary : theme.textMuted
@@ -389,25 +389,25 @@ const MyRoadmapsPage = () => {
                 >
                   Standard
                 </button>
-                <button
+                  <button 
                   onClick={() => setActiveTab('custom')}
-                  className={`px-4 py-2 font-medium ${activeTab === 'custom' ? 'border-b-2' : ''}`}
+                  className={`px-3 py-2 text-sm sm:px-4 sm:text-base font-medium ${activeTab === 'custom' ? 'border-b-2' : ''}`}
                   style={{
                     borderColor: activeTab === 'custom' ? theme.primary : 'transparent',
                     color: activeTab === 'custom' ? theme.primary : theme.textMuted
                   }}
                 >
                   Custom
-                </button>
+                  </button>
                 <button
                   onClick={() => setActiveTab('resources')}
-                  className={`px-4 py-2 font-medium ${activeTab === 'resources' ? 'border-b-2' : ''}`}
+                  className={`px-3 py-2 text-sm sm:px-4 sm:text-base font-medium ${activeTab === 'resources' ? 'border-b-2' : ''}`}
                   style={{
                     borderColor: activeTab === 'resources' ? theme.primary : 'transparent',
                     color: activeTab === 'resources' ? theme.primary : theme.textMuted
                   }}
                 >
-                  With Resources
+                  Resources
                 </button>
               </div>
             </div>
@@ -437,20 +437,21 @@ const MyRoadmapsPage = () => {
               searchTerm={searchTerm}
               activeTab={activeTab}
               sortMethod={sortMethod}
+              theme={theme}
               darkMode={darkMode}
             />
           )}
         </motion.div>
       </motion.main>
-
+      
       {/* Import Modal */}
-      <ImportRoadmapModal
-        isOpen={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
+      <ImportRoadmapModal 
+        isOpen={importModalOpen} 
+        onClose={() => setImportModalOpen(false)} 
         onSuccess={handleImportSuccess}
         theme={theme}
       />
-
+      
       {/* Chatbot */}
       <ChatbotWrapper />
     </div>

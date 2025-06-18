@@ -4,7 +4,7 @@ const FeaturesSection = ({ colors, darkMode }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-extrabold tracking-tight mb-4" style={{ color: colors.text }}>
-            How MuftCode Works
+            How CodeLyft Works
           </h2>
           <p className="max-w-2xl mx-auto text-lg" style={{ color: colors.textMuted }}>
             Our AI-powered platform creates personalized learning experiences tailored to your needs

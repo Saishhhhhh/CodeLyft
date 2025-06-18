@@ -569,6 +569,36 @@ function prepareApiResponse(content) {
   return fixedJson;
 }
 
+/**
+ * Generate a learning roadmap with retry logic
+ * @param {Object} data - User data for roadmap generation
+ * @param {number} attempt - Current attempt number (for internal retry tracking)
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @returns {Object} Generated roadmap data
+ */
+export const generateRoadmapWithRetry = async (data, attempt = 1, maxRetries = 5) => {
+  try {
+    console.log(`Attempt ${attempt} to generate roadmap`);
+    const result = await generateLearningRoadmap(data);
+    
+    if (result === null) {
+      throw new Error('Failed to generate roadmap - null result');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`Attempt ${attempt} failed:`, error);
+    
+    if (attempt < maxRetries) {
+      console.log(`Retrying... (${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return generateRoadmapWithRetry(data, attempt + 1, maxRetries);
+    }
+    
+    throw error;
+  }
+};
+
 export const generateLearningRoadmap = async (userData) => {
     try {
       console.log("Generating roadmap with user data:", userData);

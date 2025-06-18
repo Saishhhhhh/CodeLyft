@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const LoadingState = () => {
+const LoadingState = ({ theme }) => {
   // Animation variants for skeleton loading
   const pulseAnimation = {
     initial: { opacity: 0.6 },
@@ -15,9 +15,17 @@ const LoadingState = () => {
     }
   };
 
+  const skeletonBg = theme ? (theme.background || '#f3f4f6') : '#f3f4f6';
+  const skeletonFg = theme ? (theme.border || '#e5e7eb') : '#e5e7eb';
+
   return (
     <motion.div 
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+      style={{
+        background: theme?.cardBg,
+        borderColor: theme?.border,
+        color: theme?.text
+      }}
+      className="rounded-xl shadow-sm border p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -25,13 +33,15 @@ const LoadingState = () => {
       {/* Header skeleton */}
       <div className="mb-8">
         <motion.div 
-          className="h-8 w-1/3 bg-gray-200 dark:bg-gray-700 rounded-md mb-2"
+          style={{ background: skeletonFg }}
+          className="h-8 w-1/3 rounded-md mb-2"
           variants={pulseAnimation}
           initial="initial"
           animate="animate"
         />
         <motion.div 
-          className="h-4 w-2/3 bg-gray-200 dark:bg-gray-700 rounded-md"
+          style={{ background: skeletonFg }}
+          className="h-4 w-2/3 rounded-md"
           variants={pulseAnimation}
           initial="initial"
           animate="animate"
@@ -43,13 +53,14 @@ const LoadingState = () => {
         {[...Array(4)].map((_, i) => (
           <motion.div 
             key={i}
-            className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-lg"
+            style={{ background: skeletonBg }}
+            className="p-4 rounded-lg"
             variants={pulseAnimation}
             initial="initial"
             animate="animate"
           >
-            <div className="h-4 w-2/3 bg-gray-200 dark:bg-gray-600 rounded-md mb-3" />
-            <div className="h-6 w-1/3 bg-gray-200 dark:bg-gray-600 rounded-md" />
+            <div style={{ background: skeletonFg }} className="h-4 w-2/3 rounded-md mb-3" />
+            <div style={{ background: skeletonFg }} className="h-6 w-1/3 rounded-md" />
           </motion.div>
         ))}
       </div>
@@ -60,7 +71,8 @@ const LoadingState = () => {
           {[...Array(3)].map((_, i) => (
             <motion.div 
               key={i}
-              className="h-24 bg-gray-100 dark:bg-gray-700/50 rounded-lg"
+              style={{ background: skeletonBg }}
+              className="h-24 rounded-lg"
               variants={pulseAnimation}
               initial="initial"
               animate="animate"
@@ -71,7 +83,8 @@ const LoadingState = () => {
       
       {/* Filter bar skeleton */}
       <motion.div 
-        className="h-16 bg-gray-100 dark:bg-gray-700/50 rounded-lg mb-8"
+        style={{ background: skeletonBg }}
+        className="h-16 rounded-lg mb-8"
         variants={pulseAnimation}
         initial="initial"
         animate="animate"
@@ -82,7 +95,8 @@ const LoadingState = () => {
         {[...Array(3)].map((_, i) => (
           <motion.div 
             key={i}
-            className="h-32 bg-gray-100 dark:bg-gray-700/50 rounded-lg"
+            style={{ background: skeletonBg }}
+            className="h-32 rounded-lg"
             variants={pulseAnimation}
             initial="initial"
             animate="animate"

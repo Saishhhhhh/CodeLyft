@@ -33,11 +33,11 @@ const FilterBar = ({
     `}>
       {/* Search Bar */}
       <div className="relative mb-4">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search roadmaps..."
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search roadmaps..."
           className={`
             w-full pl-10 pr-4 py-2 rounded-lg
             ${darkMode
@@ -63,7 +63,7 @@ const FilterBar = ({
         {/* Tab Filters */}
         <div className="flex flex-wrap gap-2 flex-1">
           {TAB_OPTIONS.map(tab => (
-            <button
+          <button
               key={tab.value}
               onClick={() => onTabChange(tab.value)}
               className={`
@@ -77,12 +77,12 @@ const FilterBar = ({
                     : 'text-gray-600 hover:bg-gray-100 border border-gray-200'
                 }
               `}
-            >
+          >
               {tab.label}
-            </button>
+          </button>
           ))}
         </div>
-
+        
         {/* Sort Dropdown */}
         <select
           onChange={(e) => onSort(e.target.value)}
@@ -105,7 +105,7 @@ const FilterBar = ({
 
         {/* Clear Filters */}
         {(searchTerm || activeTab !== 'all') && (
-          <button
+          <button 
             onClick={onClearFilters}
             className={`
               px-3 py-1 rounded-lg text-sm font-medium
@@ -118,9 +118,9 @@ const FilterBar = ({
           >
             Clear Filters
           </button>
-        )}
+          )}
+        </div>
       </div>
-    </div>
   );
 };
 

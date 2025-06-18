@@ -16,7 +16,7 @@ const passwordResetTemplate = (options) => {
   const text = `
     Hello ${name},
     
-    You have requested to reset your password for your MuftCode account.
+    You have requested to reset your password for your CodeLyft account.
     
     Your 4-digit OTP code is: ${otp}
     
@@ -25,7 +25,7 @@ const passwordResetTemplate = (options) => {
     If you did not request a password reset, please ignore this email or contact support if you have concerns.
     
     Best regards,
-    The MuftCode Team
+    The CodeLyft Team
   `;
   
   // HTML version
@@ -91,7 +91,7 @@ const passwordResetTemplate = (options) => {
         </div>
         <div class="content">
           <p>Hello ${name},</p>
-          <p>You have requested to reset your password for your MuftCode account.</p>
+          <p>You have requested to reset your password for your CodeLyft account.</p>
           <p>Please use the following 4-digit code to reset your password:</p>
           
           <div class="otp-container">
@@ -100,10 +100,10 @@ const passwordResetTemplate = (options) => {
           
           <p>This code will expire in <strong>10 minutes</strong>.</p>
           <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
-          <p>Best regards,<br>The MuftCode Team</p>
+          <p>Best regards,<br>The CodeLyft Team</p>
         </div>
         <div class="footer">
-          <p>&copy; ${new Date().getFullYear()} MuftCode. All rights reserved.</p>
+          <p>&copy; ${new Date().getFullYear()} CodeLyft. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -127,7 +127,7 @@ const emailVerificationTemplate = (options) => {
   const text = `
     Hello ${name},
     
-    Thank you for registering with MuftCode! To complete your registration, please verify your email address.
+    Thank you for registering with CodeLyft! To complete your registration, please verify your email address.
     
     Your verification OTP code is: ${otp}
     
@@ -136,7 +136,7 @@ const emailVerificationTemplate = (options) => {
     If you did not create an account with us, please ignore this email.
     
     Best regards,
-    The MuftCode Team
+    The CodeLyft Team
   `;
   
   // HTML version
@@ -202,7 +202,7 @@ const emailVerificationTemplate = (options) => {
         </div>
         <div class="content">
           <p>Hello ${name},</p>
-          <p>Thank you for registering with MuftCode! To complete your registration, please verify your email address.</p>
+          <p>Thank you for registering with CodeLyft! To complete your registration, please verify your email address.</p>
           <p>Please use the following verification code:</p>
           
           <div class="otp-container">
@@ -211,10 +211,10 @@ const emailVerificationTemplate = (options) => {
           
           <p>This code will expire in <strong>10 minutes</strong>.</p>
           <p>If you did not create an account with us, please ignore this email.</p>
-          <p>Best regards,<br>The MuftCode Team</p>
+          <p>Best regards,<br>The CodeLyft Team</p>
         </div>
         <div class="footer">
-          <p>&copy; ${new Date().getFullYear()} MuftCode. All rights reserved.</p>
+          <p>&copy; ${new Date().getFullYear()} CodeLyft. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -237,7 +237,7 @@ const welcomeEmailTemplate = (options) => {
   const text = `
     Hello ${name},
     
-    Welcome to MuftCode! We're thrilled to have you join our community.
+    Welcome to CodeLyft! We're thrilled to have you join our community.
     
     Your account has been successfully created. Here's what you can do next:
     
@@ -248,7 +248,7 @@ const welcomeEmailTemplate = (options) => {
     If you have any questions or need assistance, please don't hesitate to contact our support team.
     
     Best regards,
-    The MuftCode Team
+    The CodeLyft Team
   `;
   
   // HTML version
@@ -258,7 +258,7 @@ const welcomeEmailTemplate = (options) => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Welcome to MuftCode</title>
+      <title>Welcome to CodeLyft</title>
       <style>
         body {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -313,11 +313,11 @@ const welcomeEmailTemplate = (options) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Welcome to MuftCode!</h1>
+          <h1>Welcome to CodeLyft!</h1>
         </div>
         <div class="content">
           <p>Hello ${name},</p>
-          <p>Thank you for joining MuftCode! We're excited to have you as part of our community.</p>
+          <p>Thank you for joining CodeLyft! We're excited to have you as part of our community.</p>
           
           <div class="next-steps">
             <h3>Here's what you can do next:</h3>
@@ -329,10 +329,10 @@ const welcomeEmailTemplate = (options) => {
           </div>
           
           <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
-          <p>Best regards,<br>The MuftCode Team</p>
+          <p>Best regards,<br>The CodeLyft Team</p>
         </div>
         <div class="footer">
-          <p>&copy; ${new Date().getFullYear()} MuftCode. All rights reserved.</p>
+          <p>&copy; ${new Date().getFullYear()} CodeLyft. All rights reserved.</p>
         </div>
       </div>
     </body>

@@ -43,7 +43,7 @@ const Footer = ({ colors, darkMode }) => {
           <div className="col-span-1">
             <div className="flex items-center mb-3">
               <h2 className="text-xl font-bold" style={{ color: colors.text }}>
-                Muft<span style={{ color: colors.primary }}>Code</span>
+                Code<span style={{ color: colors.primary }}>Lyft</span>
               </h2>
             </div>
             <p className="text-xs mb-3" style={{ color: colors.textMuted }}>
@@ -120,7 +120,7 @@ const Footer = ({ colors, darkMode }) => {
                 </Link>
               </li>
               <li>
-                <a href="https://github.com/yourusername/muftcode" target="_blank" rel="noopener noreferrer" className="hover:underline transition-colors" style={{ color: `${colors.textMuted}90` }}>
+                <a href="https://github.com/yourusername/codelyft" target="_blank" rel="noopener noreferrer" className="hover:underline transition-colors" style={{ color: `${colors.textMuted}90` }}>
                   GitHub Repository
                 </a>
               </li>
@@ -139,7 +139,7 @@ const Footer = ({ colors, darkMode }) => {
         {/* Copyright and Legal - More subtle */}
         <div className="flex flex-col md:flex-row justify-between items-center">
           <p className="text-xs mb-2 md:mb-0" style={{ color: `${colors.textMuted}80` }}>
-            © {currentYear} MuftCode. All rights reserved.
+            © {currentYear} CodeLyft. All rights reserved.
           </p>
           <div className="flex space-x-6">
             <a href="#" className="text-xs hover:underline transition-colors" style={{ color: `${colors.textMuted}80` }}>

@@ -42,3 +42,58 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(139, 92, 246, 0.2) transparent;
 }
+
+/* Tech Logo Styles */
+.tech-logo-container {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.tech-logo-container.with-name {
+  gap: 0.5rem;
+}
+
+.tech-logo-container.with-name.name-bottom {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tech-logo {
+  object-fit: contain;
+  transition: transform 0.2s ease;
+}
+
+.tech-logo:hover {
+  transform: scale(1.1);
+}
+
+.tech-logo-secondary {
+  /* Default filter for black SVGs to match theme */
+  filter: invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%);
+}
+
+.tech-logo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e5e7eb;
+  color: #6b7280;
+  font-weight: bold;
+  border-radius: 50%;
+}
+
+.dark .tech-logo-placeholder {
+  background-color: #374151;
+  color: #9ca3af;
+}
+
+.tech-name {
+  font-size: 0.875rem;
+  color: #4b5563;
+}
+
+.dark .tech-name {
+  color: #d1d5db;
+}

@@ -92,7 +92,7 @@ passport.use(new GoogleStrategy(
 
         await sendEmail({
           to: user.email,
-          subject: 'Welcome to MuftCode!',
+          subject: 'Welcome to CodeLyft!',
           text: emailContent.text,
           html: emailContent.html
         });
@@ -168,7 +168,7 @@ passport.use(new GitHubStrategy(
 
           await sendEmail({
             to: primaryEmail,
-            subject: 'Welcome to MuftCode!',
+            subject: 'Welcome to CodeLyft!',
             text: emailContent.text,
             html: emailContent.html
           });

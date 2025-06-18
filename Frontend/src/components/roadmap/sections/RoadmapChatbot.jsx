@@ -130,7 +130,7 @@ const RoadmapChatbot = ({ roadmap, currentVideo, theme }) => {
       // Prepare system message with context
       const systemMessage = {
         role: 'system',
-        content: `You are a specialized AI assistant for the MuftCode learning platform, specifically helping with roadmap "${roadmap?.title || 'this roadmap'}".
+        content: `You are a specialized AI assistant for the CodeLyft learning platform, specifically helping with roadmap "${roadmap?.title || 'this roadmap'}".
         Focus on providing technical explanations, code examples, and learning guidance related to the current topic.
         Be concise, helpful, and focus on practical advice related to programming and technology learning.
         ${contextString}`

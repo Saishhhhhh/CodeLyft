@@ -30,7 +30,7 @@ const sendEmail = async (options) => {
     
     // Send mail with defined transport object
     const info = await transporter.sendMail({
-      from: `"${process.env.FROM_NAME || 'MuftCode'}" <${process.env.FROM_EMAIL || 'noreply@muftcode.com'}>`,
+      from: `"${process.env.FROM_NAME || 'CodeLyft'}" <${process.env.FROM_EMAIL || 'noreply@codelyft.com'}>`,
       to: options.to,
       subject: options.subject,
       text: options.text,

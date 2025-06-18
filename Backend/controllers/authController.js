@@ -49,7 +49,7 @@ exports.register = async (req, res) => {
 
       await sendEmail({
         to: user.email,
-        subject: 'Welcome to MuftCode!',
+        subject: 'Welcome to CodeLyft!',
         text: welcomeContent.text,
         html: welcomeContent.html
       });

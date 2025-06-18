@@ -113,7 +113,7 @@ const Navbar = () => {
           >
             <Link to="/" className="flex items-center group">
               <span className="text-2xl font-bold tracking-tight transition-colors duration-200 group-hover:opacity-80" style={{ color: colors.text }}>
-                Muft<span style={{ color: colors.primary }}>Code</span>
+                Code<span style={{ color: colors.primary }}>Lyft</span>
               </span>
             </Link>
           </motion.div>
