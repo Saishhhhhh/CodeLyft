@@ -528,7 +528,7 @@ const welcomeEmailTemplate = (options) => {
           <p>Best regards,<br>The CodeLyft Team</p>
           
           <div style="text-align: center; margin-top: 25px;">
-            <a href="http://localhost:5173/dashboard" class="button">Go to Dashboard</a>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard" class="button">Go to Dashboard</a>
           </div>
         </div>
         <div class="footer">
