@@ -178,37 +178,45 @@ const CustomRoadmapPage = () => {
   }, [currentRoadmap, isCreatingRoadmap, id, passedRoadmap]);
 
   const handleCreateRoadmap = () => {
-    if (roadmapName.trim()) {
-      console.log("Creating new roadmap:", roadmapName, roadmapDescription);
-      
-      // Create the roadmap through the context function
-      const newRoadmap = createRoadmap(roadmapName, roadmapDescription);
-      console.log("New roadmap created:", newRoadmap);
-      
-      // Set state to editing mode for the new roadmap
-      setIsCreatingRoadmap(false);
-      hasProcessedRoadmap.current = true;
-      
-      toast.success("Roadmap created successfully! Add topics to your roadmap.");
-    } else {
+    if (!roadmapName.trim()) {
       toast.error("Please enter a roadmap name");
+      return;
     }
+    
+    if (!roadmapDescription.trim()) {
+      toast.error("Please enter a roadmap description");
+      return;
+    }
+    
+    console.log("Creating new roadmap:", roadmapName, roadmapDescription);
+    
+    // Create the roadmap through the context function
+    const newRoadmap = createRoadmap(roadmapName, roadmapDescription);
+    console.log("New roadmap created:", newRoadmap);
+    
+    // Set state to editing mode for the new roadmap
+    setIsCreatingRoadmap(false);
+    hasProcessedRoadmap.current = true;
+    
+    toast.success("Roadmap created successfully! Add topics to your roadmap.");
   };
 
   const handleAddTopic = () => {
-    if (newTopic.trim()) {
-      console.log("Adding new topic:", newTopic);
+    const trimmedTopic = newTopic.trim();
+    
+    if (trimmedTopic) {
+      console.log("Adding new topic:", trimmedTopic);
       
       if (!currentRoadmap || !currentRoadmap.topics) {
         console.error("Cannot add topic: currentRoadmap or topics array is missing");
         toast.error("Error adding topic. Please try again.");
-      return;
-    }
+        return;
+      }
 
-      // Create the topic directly
+      // Create the topic directly with trimmed value
       const newTopicObject = {
         id: Date.now(),
-        title: newTopic,
+        title: trimmedTopic,
         resources: []
       };
       
@@ -235,6 +243,11 @@ const CustomRoadmapPage = () => {
 
     if (!currentRoadmap.name) {
       toast.error("Please give your roadmap a name before saving");
+      return;
+    }
+    
+    if (!currentRoadmap.description) {
+      toast.error("Please provide a description for your roadmap before saving");
       return;
     }
 
@@ -392,6 +405,11 @@ const CustomRoadmapPage = () => {
 
     if (!currentRoadmap || !currentRoadmap.name) {
       toast.error("Please give your roadmap a name before updating");
+      return;
+    }
+    
+    if (!currentRoadmap.description) {
+      toast.error("Please provide a description for your roadmap before updating");
       return;
     }
     
@@ -590,13 +608,14 @@ const CustomRoadmapPage = () => {
               
               <div className="mb-6 md:mb-8">
                 <label htmlFor="roadmap-description" className="block text-sm font-medium mb-2 md:mb-3" style={{ color: colors.text }}>
-                  Description (Optional)
+                  Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   id="roadmap-description"
                   value={roadmapDescription}
                   onChange={(e) => setRoadmapDescription(e.target.value)}
                   placeholder="Enter a description for your roadmap"
+                  required
                   className="w-full p-3 md:p-4 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-200 min-h-[100px] md:min-h-[120px] resize-none custom-roadmap-textarea"
                   style={{ 
                     backgroundColor: colors.codeBg,
@@ -694,6 +713,7 @@ const CustomRoadmapPage = () => {
                 type="text"
                 value={newTopic}
                 onChange={(e) => setNewTopic(e.target.value)}
+                onBlur={(e) => setNewTopic(e.target.value.trim())}
                 placeholder="Enter a topic (e.g., React Basics, CSS Grid, etc.)"
                 className="flex-grow p-3 md:p-4 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-200 custom-roadmap-input"
                 style={{ 

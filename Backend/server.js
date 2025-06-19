@@ -3,6 +3,10 @@ const dotenv = require('dotenv');
 // Load environment variables from .env file
 dotenv.config();
 
+if (process.env.NODE_ENV === 'production') {
+  console.log = () => {};
+}
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -37,6 +41,9 @@ app.use(cors({
 // Apply middleware
 app.use(express.json());
 app.use(cookieParser());
+
+// Serve static files from the 'public' directory
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Configure session
 app.use(
@@ -89,5 +96,5 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  // console.log(`Server running on port ${PORT}`);
 }); 

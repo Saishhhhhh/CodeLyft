@@ -547,7 +547,7 @@ const UserResourceManager = ({ roadmap, onRoadmapUpdate }) => {
               <p className="text-sm" style={{ color: colors.textMuted }}>
                 You've added resources for {addedResources.size} topics and skipped {skippedTopics.size} topics.
                 {topics.length > (addedResources.size + skippedTopics.size) && (
-                  <span> AI will find resources for the remaining {topics.length - (addedResources.size + skippedTopics.size)} topics.</span>
+                  <span> We will find resources for the remaining {topics.length - (addedResources.size + skippedTopics.size)} topics.</span>
                 )}
         </p>
             </div>
@@ -564,7 +564,7 @@ const UserResourceManager = ({ roadmap, onRoadmapUpdate }) => {
                 }}
               >
                 <FaRobot className="text-sm" />
-                <span>Find AI Resources for Remaining Topics</span>
+                <span>Find Smart Resources for Remaining Topics</span>
           </button>
             </div>
           </div>

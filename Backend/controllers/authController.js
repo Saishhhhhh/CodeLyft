@@ -41,38 +41,24 @@ exports.register = async (req, res) => {
     const otp = user.getEmailVerificationOTP();
     await user.save();
 
-    // Send welcome email
+    // Send combined welcome and verification email
     try {
+      // Create welcome content with OTP
       const welcomeContent = welcomeEmailTemplate({
-        name: user.name
+        name: user.name,
+        otp: otp  // Pass OTP to the welcome template
       });
 
       await sendEmail({
         to: user.email,
-        subject: 'Welcome to CodeLyft!',
+        subject: 'Welcome to CodeLyft! Verify Your Email',
         text: welcomeContent.text,
         html: welcomeContent.html
       });
+      
+      console.log(`Welcome email with OTP sent to ${user.email}`);
     } catch (emailError) {
-      console.error('Welcome email error:', emailError);
-      // Don't fail registration if email fails
-    }
-
-    // Send verification email
-    try {
-      const verificationContent = emailVerificationTemplate({
-        name: user.name,
-        otp
-      });
-
-      await sendEmail({
-        to: user.email,
-        subject: 'Verify Your Email Address',
-        text: verificationContent.text,
-        html: verificationContent.html
-      });
-    } catch (emailError) {
-      console.error('Verification email error:', emailError);
+      console.error('Welcome/verification email error:', emailError);
       // Don't fail registration if email fails
     }
 

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 import { getUserStats, formatLearningTime } from '../services/userStatsService';
 import { motion } from 'framer-motion';
+import { getAvatarUrl } from '../services/resourceUtils';
 import { 
   FaRoad, 
   FaYoutube, 
@@ -205,7 +206,7 @@ const Dashboard = () => {
                   }}
                 >
                   <img 
-                    src={user?.profilePicture || "https://via.placeholder.com/200?text=Profile"} 
+                    src={getAvatarUrl(user?.profilePicture)} 
                     alt="Profile" 
                     className="w-full h-full object-cover"
                   />

@@ -240,14 +240,14 @@ const Chatbot = () => {
             {/* Clear chat button */}
             {messages.length > 0 && (
               <div className="flex justify-between mt-2">
-                <button 
-                  onClick={clearChat}
+              <button 
+                onClick={clearChat}
                   className="text-[10px] sm:text-xs hover:underline"
                   style={{ color: theme.textMuted }}
-                  disabled={isLoading}
-                >
-                  Clear conversation
-                </button>
+                disabled={isLoading}
+              >
+                Clear conversation
+              </button>
                 
                 {expanded && (
                   <button

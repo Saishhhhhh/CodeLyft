@@ -454,7 +454,7 @@ const AboutPage = () => {
               }}
               viewport={{ once: true }}
             >
-              <Link to="/roadmap-test">
+              <Link to="/">
                 <motion.button 
                   className="px-6 py-3 sm:px-8 sm:py-4 rounded-lg font-medium text-base sm:text-lg transition-all duration-300 text-white"
                   style={{ 

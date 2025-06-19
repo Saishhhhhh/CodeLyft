@@ -2,17 +2,30 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sendVerificationEmail, verifyEmail } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import AuthLayout from '../components/auth/AuthLayout';
 
 const EmailVerificationPage = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, isNewlyRegistered } = useAuth();
+  const { darkMode } = useTheme();
   const [otp, setOtp] = useState(['', '', '', '']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  
+  // Define colors based on theme
+  const colors = {
+    primary: darkMode ? '#4F46E5' : '#4F46E5', // Indigo - main brand color
+    background: darkMode ? '#111827' : '#F9F9F9', // Dark Gray / Light Gray
+    cardBg: darkMode ? '#1E293B' : '#FFFFFF', // Darker background / White
+    inputBg: darkMode ? '#1F2937' : '#F3F4F6', // Dark input / Light input
+    inputBorder: darkMode ? '#374151' : '#D1D5DB', // Dark border / Light border
+    text: darkMode ? '#F9FAFB' : '#111827', // Light text / Dark text
+    textMuted: darkMode ? '#9CA3AF' : '#6B7280', // Muted light text / Muted dark text
+  };
   
   // Create refs for OTP inputs
   const otpRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
@@ -36,24 +49,42 @@ const EmailVerificationPage = () => {
     }
   }, [countdown]);
   
-  // Send verification email on initial load
+  // Send verification email on initial load only if user didn't just register
   useEffect(() => {
     if (user && !user.isEmailVerified && !loading) {
-      handleSendVerificationEmail();
+      // If user just registered, they already received the OTP in welcome email
+      // so we don't need to send another one
+      if (!isNewlyRegistered) {
+        handleSendVerificationEmail();
+      } else {
+        // For newly registered users, just set a countdown to prevent immediate resend
+        setCountdown(60);
+        console.log('User just registered, not sending another verification email');
+      }
     }
-  }, [user, loading]);
+  }, [user, loading, isNewlyRegistered]);
   
   const handleSendVerificationEmail = async () => {
     try {
       setIsSending(true);
       setError(null);
       
-      await sendVerificationEmail();
+      const response = await sendVerificationEmail();
+      
+      // If response indicates an OTP was already sent, just set the countdown
+      if (response.alreadySent) {
+        console.log('Using existing OTP, not sending new email');
+      }
       
       // Set countdown for resend (60 seconds)
       setCountdown(60);
     } catch (err) {
       setError(err.message);
+      
+      // If the error is about rate limiting, set the countdown accordingly
+      if (err.message.includes('wait') || err.message.includes('minute')) {
+        setCountdown(60); // Set to 60 seconds if rate limited
+      }
     } finally {
       setIsSending(false);
     }
@@ -139,8 +170,8 @@ const EmailVerificationPage = () => {
   // Show loading state
   if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      <div className="flex items-center justify-center min-h-screen transition-colors duration-300" style={{ backgroundColor: colors.background }}>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primary }}></div>
       </div>
     );
   }
@@ -155,7 +186,7 @@ const EmailVerificationPage = () => {
       {!success ? (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-gray-300">
+            <label htmlFor="otp" className="block text-sm font-medium" style={{ color: colors.text }}>
               Verification Code (OTP)
             </label>
             <div className="mt-1 flex justify-center gap-2">
@@ -170,12 +201,18 @@ const EmailVerificationPage = () => {
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
                   onPaste={index === 0 ? handleOtpPaste : undefined}
-                  className="appearance-none w-14 h-14 text-center px-0 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white text-xl font-bold"
+                  className="appearance-none w-14 h-14 text-center px-0 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 text-xl font-bold"
+                  style={{
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                    focusRingColor: colors.primary
+                  }}
                   autoFocus={index === 0}
                 />
               ))}
             </div>
-            <p className="mt-1 text-xs text-gray-400 text-center">
+            <p className="mt-1 text-xs text-center" style={{ color: colors.textMuted }}>
               Enter the 4-digit code sent to your email
             </p>
           </div>
@@ -184,9 +221,13 @@ const EmailVerificationPage = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                isSubmitting ? 'bg-purple-700' : 'bg-purple-600 hover:bg-purple-700'
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500`}
+              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-all duration-200 ${
+                isSubmitting ? 'opacity-80' : 'hover:opacity-90'
+              } focus:outline-none focus:ring-2 focus:ring-offset-2`}
+              style={{ 
+                backgroundColor: colors.primary,
+                boxShadow: `0 4px 6px -1px ${colors.primary}30`
+              }}
             >
               {isSubmitting ? 'Verifying...' : 'Verify Email'}
             </button>
@@ -197,11 +238,12 @@ const EmailVerificationPage = () => {
               type="button"
               onClick={handleSendVerificationEmail}
               disabled={countdown > 0 || isSending}
-              className={`text-sm ${
-                countdown > 0 || isSending 
-                  ? 'text-gray-500 cursor-not-allowed' 
-                  : 'text-purple-400 hover:text-purple-300'
+              className={`text-sm transition-colors duration-200 ${
+                countdown > 0 || isSending ? 'cursor-not-allowed' : 'hover:opacity-80'
               }`}
+              style={{ 
+                color: countdown > 0 || isSending ? colors.textMuted : colors.primary
+              }}
             >
               {isSending 
                 ? 'Sending...' 
@@ -213,13 +255,15 @@ const EmailVerificationPage = () => {
         </form>
       ) : (
         <div className="text-center">
-          <div className="mb-4 text-green-400">
+          <div className="mb-4" style={{ color: '#10B981' }}> {/* Always green for success */}
             <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 className="text-xl font-medium text-white mb-2">Email Verified Successfully!</h3>
-          <p className="text-gray-300 mb-6">
+          <h3 className="text-xl font-medium mb-2" style={{ color: colors.text }}>
+            Email Verified Successfully!
+          </h3>
+          <p className="mb-6" style={{ color: colors.textMuted }}>
             Your email has been verified. You will be redirected to the dashboard shortly.
           </p>
         </div>

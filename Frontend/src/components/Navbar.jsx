@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import logo from '../assets/logo.svg';
 import { motion } from 'framer-motion';
+import { getAvatarUrl } from '../services/resourceUtils';
 
 const Navbar = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -246,7 +247,7 @@ const Navbar = () => {
                 >
                   <div className="w-9 h-9 rounded-full overflow-hidden transition-transform duration-200 group-hover:scale-105">
                     <img 
-                      src={user?.profilePicture || "https://via.placeholder.com/40"} 
+                      src={getAvatarUrl(user?.profilePicture)} 
                       alt="Profile" 
                       className="w-full h-full object-cover"
                     />
@@ -472,7 +473,7 @@ const Navbar = () => {
                     <div className="flex items-center">
                       <div className="w-8 h-8 rounded-full overflow-hidden transition-transform duration-200 hover:scale-105">
                         <img 
-                          src={user?.profilePicture || "https://via.placeholder.com/40"} 
+                          src={getAvatarUrl(user?.profilePicture)} 
                           alt="Profile" 
                           className="w-full h-full object-cover"
                         />

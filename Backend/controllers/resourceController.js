@@ -414,9 +414,9 @@ exports.cacheResource = async (req, res) => {
     if (existingResource) {
       // Resource exists, update it
       
-      // Set expiration to 7 days from now
+      // Set expiration to 15 days from now
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setDate(expiresAt.getDate() + 15);
       existingResource.expiresAt = expiresAt;
       
       // Check if this is a new technology for this resource
@@ -511,9 +511,9 @@ exports.cacheResource = async (req, res) => {
         videos: processedVideos
       };
       
-      // Set expiration to 7 days from now
+      // Set expiration to 15 days from now
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setDate(expiresAt.getDate() + 15);
       newResource.expiresAt = expiresAt;
       
       const createdResource = await Resource.create(newResource);
@@ -744,7 +744,7 @@ exports.updateSharedResources = async (req, res) => {
         
         // Update the expiration date
         const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7);
+        expiresAt.setDate(expiresAt.getDate() + 15);
         existingResource.expiresAt = expiresAt;
         
         await existingResource.save();

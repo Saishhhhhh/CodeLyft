@@ -205,6 +205,19 @@ exports.sendVerificationEmail = async (req, res) => {
       });
     }
 
+    // Check if a valid OTP already exists (not expired)
+    const now = Date.now();
+    
+    if (user.otpExpire && user.otpExpire > now) {
+      // If user already has a valid OTP, don't send another email
+      // Just return success with a message that an OTP already exists
+      return res.status(200).json({
+        success: true,
+        message: 'A valid verification code already exists and has been sent to your email',
+        alreadySent: true
+      });
+    }
+
     // Generate OTP
     const otp = user.getEmailVerificationOTP();
     await user.save();

@@ -114,7 +114,7 @@ const UserResourceInput = ({ onResourceAdded, onClose, onSkip, roadmap, topicTit
         <div className="space-y-4">
           <p className="text-sm" style={{ color: colors.textMuted }}>
             Paste a YouTube video or playlist URL that you'd like to use for learning this topic. 
-            We'll use your selection instead of our AI recommendations for this topic.
+            We'll use your selection instead of our Smart recommendations for this topic.
           </p>
         </div>
 

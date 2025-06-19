@@ -196,7 +196,7 @@ const ProfilePage = () => {
                       <div className="relative">
                         <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg">
                           <img
-                            src={imagePreview || (user?.profilePicture || "https://via.placeholder.com/200?text=Profile")}
+                            src={imagePreview || (user?.profilePicture || "http://localhost:5000/public/images/avatars/default-avatar.png")}
                             alt="Profile"
                             className="w-full h-full object-cover"
                           />

@@ -60,8 +60,8 @@ const essentialLogos = {
   'git': 'git.svg',
   'github': 'github.svg',
   'vscode': 'vscode.svg'
-};
-
+  };
+  
 /**
  * Try to load data from localStorage with fallback to default
  * @param {string} key - localStorage key

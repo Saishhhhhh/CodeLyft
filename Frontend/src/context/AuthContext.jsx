@@ -26,6 +26,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pendingValidation, setPendingValidation] = useState(null);
+  const [isNewlyRegistered, setIsNewlyRegistered] = useState(false);
 
   // Load user on initial render if token exists or if redirected from OAuth
   useEffect(() => {
@@ -89,6 +90,9 @@ export const AuthProvider = ({ children }) => {
       const response = await registerUser(userData);
       setUser(response.user);
       
+      // Set the newly registered flag
+      setIsNewlyRegistered(true);
+      
       // Redirect to email verification page if user is not verified
       if (response.user && !response.user.isEmailVerified) {
         window.location.href = '/verify-email';
@@ -115,6 +119,8 @@ export const AuthProvider = ({ children }) => {
       
       if (response.success && response.user) {
         setUser(response.user);
+        // Reset the newly registered flag on login
+        setIsNewlyRegistered(false);
         
         // Check if there's a pending prompt to validate
         if (hasPendingPrompt()) {
@@ -149,6 +155,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await logoutUser();
       setUser(null);
+      setIsNewlyRegistered(false);
       clearPendingPrompt();
     } catch (err) {
       setError(err.message);
@@ -187,6 +194,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     error,
     isAuthenticated: !!user,
+    isNewlyRegistered,
     pendingValidation,
     clearPendingValidation,
     register,
