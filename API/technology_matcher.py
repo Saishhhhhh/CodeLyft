@@ -1,6 +1,6 @@
 """
-Technology Matcher API - Semantic similarity matching for technology names
-Uses sentence-transformers/all-MiniLM-L6-v2 from Hugging Face
+Technology Matcher API - Lightweight string matching for technology names
+Uses fuzzy string matching and tech_aliases.json for technology matching
 """
 
 import os
@@ -12,9 +12,7 @@ import logging
 import time
 import re
 from pydantic import BaseModel
-
-# Import sentence-transformers
-from sentence_transformers import SentenceTransformer, util
+from difflib import SequenceMatcher
 
 # Configure logging
 logging.basicConfig(
@@ -26,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="Technology Matcher API",
-    description="API for matching technology names using semantic similarity",
+    description="API for matching technology names using lightweight string matching",
     version="1.0.0"
 )
 
@@ -40,8 +38,6 @@ app.add_middleware(
 )
 
 # Global variables
-model = None
-embedding_cache = {}
 SIMILARITY_THRESHOLD = 0.85  # Threshold for considering technologies equivalent
 
 # Load technology aliases from JSON
@@ -86,23 +82,13 @@ class TechnologyMatchResponse(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
-    """Load the model at startup"""
-    global model
-    logger.info("Loading sentence-transformers model...")
-    try:
-        # Load the model
-        model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-        logger.info("Model loaded successfully")
-    except Exception as e:
-        logger.error(f"Error loading model: {e}")
-        # Continue without failing - will return error on actual API calls
+    """Initialize the technology matcher"""
+    logger.info("Technology matcher initialized with lightweight string matching")
 
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint"""
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    return {"status": "healthy", "model": "sentence-transformers/all-MiniLM-L6-v2"}
+    return {"status": "healthy", "method": "lightweight_string_matching"}
 
 def normalize_tech_name(tech_name: str) -> str:
     """Normalize technology name for better matching"""
@@ -154,59 +140,69 @@ def check_alias_match(tech1: str, tech2: str) -> bool:
     # No match found
     return False
 
-def get_embedding(text: str):
-    """Get embedding for text with caching"""
-    global embedding_cache, model
+def get_canonical_name(tech_name: str) -> Optional[str]:
+    """Get the canonical name for a technology if it exists in our aliases"""
+    tech_lower = tech_name.lower()
     
-    # Normalize the text
-    normalized_text = normalize_tech_name(text)
+    # Direct match
+    if tech_lower in ALIAS_TO_CANONICAL:
+        return ALIAS_TO_CANONICAL[tech_lower]
     
-    # Check if embedding exists in cache
-    if normalized_text in embedding_cache:
-        return embedding_cache[normalized_text]
+    # Fuzzy match with aliases
+    best_match = None
+    best_score = 0
     
-    # Generate new embedding
-    if model is None:
-        # Try to load the model if it's not loaded yet
-        try:
-            logger.info("Attempting to load model on demand")
-            model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-        except Exception as e:
-            logger.error(f"Failed to load model on demand: {e}")
-            raise ValueError("Model not loaded and could not be loaded on demand")
+    for alias, canonical in ALIAS_TO_CANONICAL.items():
+        score = SequenceMatcher(None, tech_lower, alias).ratio()
+        if score > best_score and score > 0.8:  # 80% similarity threshold
+            best_score = score
+            best_match = canonical
     
-    embedding = model.encode(normalized_text)
-    
-    # Cache the embedding
-    embedding_cache[normalized_text] = embedding
-    
-    return embedding
+    return best_match
 
 def get_similarity(tech1: str, tech2: str) -> float:
-    """Calculate similarity between two technology names"""
+    """Calculate similarity between two technology names using multiple methods"""
     # Quick exact match check
     if tech1.lower() == tech2.lower():
         return 1.0
     
-    # Get embeddings
-    try:
-        embedding1 = get_embedding(tech1)
-        embedding2 = get_embedding(tech2)
-        
-        # Calculate cosine similarity
-        similarity = util.cos_sim(embedding1, embedding2).item()
-        
-        return similarity
-    except Exception as e:
-        logger.error(f"Error calculating similarity: {e}")
-        return 0.0  # Return 0 similarity on error
+    # Check alias match first
+    if check_alias_match(tech1, tech2):
+        return 1.0
+    
+    # Get canonical names
+    canonical1 = get_canonical_name(tech1)
+    canonical2 = get_canonical_name(tech2)
+    
+    # If both have canonical names, compare them
+    if canonical1 and canonical2:
+        if canonical1 == canonical2:
+            return 0.95  # Very high similarity for same canonical name
+        else:
+            # Compare canonical names with fuzzy matching
+            return SequenceMatcher(None, canonical1, canonical2).ratio()
+    
+    # If only one has canonical name, compare original with canonical
+    if canonical1:
+        return max(
+            SequenceMatcher(None, tech1.lower(), canonical1).ratio(),
+            SequenceMatcher(None, tech2.lower(), canonical1).ratio()
+        )
+    elif canonical2:
+        return max(
+            SequenceMatcher(None, tech1.lower(), canonical2).ratio(),
+            SequenceMatcher(None, tech2.lower(), canonical2).ratio()
+        )
+    
+    # Fallback to direct fuzzy matching
+    return SequenceMatcher(None, tech1.lower(), tech2.lower()).ratio()
 
-def generate_explanation(tech1: str, tech2: str, similarity: float, method: str = "semantic") -> str:
+def generate_explanation(tech1: str, tech2: str, similarity: float, method: str = "string_matching") -> str:
     """Generate explanation for the match result"""
     if method == "alias":
         return f"Match found via technology alias dictionary between '{tech1}' and '{tech2}'"
     elif similarity >= SIMILARITY_THRESHOLD:
-        if similarity >= 0.9:
+        if similarity >= 0.95:
             return f"Very high {method} similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
         else:
             return f"Sufficient {method} similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
@@ -225,7 +221,7 @@ async def match_technologies(request: TechnologyMatchRequest):
                 explanation=generate_explanation(request.tech1, request.tech2, 1.0, method="alias")
             )
         
-        # Step 2: Calculate similarity using embeddings
+        # Step 2: Calculate similarity using string matching
         try:
             similarity = get_similarity(request.tech1, request.tech2)
             
@@ -242,14 +238,14 @@ async def match_technologies(request: TechnologyMatchRequest):
             )
         except Exception as e:
             logger.error(f"Error calculating similarity: {e}")
-            # If semantic similarity fails, fall back to simple string comparison
+            # If string matching fails, fall back to simple string comparison
             are_equivalent = normalize_tech_name(request.tech1) == normalize_tech_name(request.tech2)
             similarity = 1.0 if are_equivalent else 0.0
             
             return TechnologyMatchResponse(
                 areEquivalent=are_equivalent,
                 similarity=similarity,
-                explanation=f"Fallback comparison (semantic matching failed): {request.tech1} and {request.tech2} are {'equivalent' if are_equivalent else 'different'}"
+                explanation=f"Fallback comparison (string matching failed): {request.tech1} and {request.tech2} are {'equivalent' if are_equivalent else 'different'}"
             )
     except Exception as e:
         logger.error(f"Error matching technologies: {e}")
