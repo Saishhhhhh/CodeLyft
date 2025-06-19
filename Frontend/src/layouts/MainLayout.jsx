@@ -3,7 +3,7 @@ import ChatbotContainer from '../components/chatbot/ChatbotContainer';
 
 const MainLayout = ({ children }) => {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen theme-transition">
       <Navbar />
       <main>
         {children}

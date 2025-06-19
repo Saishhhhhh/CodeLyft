@@ -57,6 +57,8 @@ const Navbar = () => {
     }
   };
 
+
+
   // Define colors based on theme
   const colors = {
     primary: darkMode ? '#8B5CF6' : '#4F46E5', // Vibrant purple for dark mode, Indigo for light
@@ -136,7 +138,7 @@ const Navbar = () => {
                 }}
               >
                 <Link 
-                  to={item === "About" ? "/about" : "#how-it-works"}
+                  to={item === "About" ? "/about" : "/#how-it-works"}
                   className="font-medium relative transition-all duration-200 hover:opacity-80 group"
                   style={{ 
                     color: location.pathname === (item === "About" ? "/about" : "/how-it-works") ? colors.primary : colors.text,
@@ -144,9 +146,13 @@ const Navbar = () => {
                   onClick={(e) => {
                     if (item === "How it Works") {
                       e.preventDefault();
-                      const element = document.getElementById('how-it-works');
-                      if (element) {
-                        element.scrollIntoView({ behavior: 'smooth' });
+                      if (isHomePage) {
+                        const section = document.getElementById('how-it-works');
+                        if (section) {
+                          section.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      } else {
+                        navigate('/#how-it-works');
                       }
                     }
                   }}

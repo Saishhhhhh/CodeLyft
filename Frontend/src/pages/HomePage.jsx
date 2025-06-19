@@ -1,5 +1,6 @@
 import { useTheme } from '../context/ThemeContext';
 import { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import HeroSection from '../components/home/HeroSection';
 import CtaSection from '../components/home/CtaSection';
 import Footer from '../components/home/Footer';
@@ -13,6 +14,19 @@ import {
 import ProcessSection from '../components/home/ProcessSection';
 
 const HomePage = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash) {
+      const id = location.hash.substring(1);
+      const element = document.getElementById(id);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+  }, [location]);
   const { darkMode } = useTheme();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const backgroundRef = useRef(null);
@@ -272,7 +286,7 @@ const HomePage = () => {
         </section>
         
         {/* Process Section with Tech Stack */}
-        <section className="py-12 md:py-16">
+        <section id="how-it-works" className="py-12 md:py-16">
           <div className="w-full">
             <ProcessSection colors={colors} darkMode={darkMode} />
           </div>

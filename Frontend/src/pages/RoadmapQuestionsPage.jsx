@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import HeroAnimation from '../components/HeroAnimation';
 import { generateLearningQuestions, validateAndGenerateQuestions } from '../services/groqService';
 import { hasPendingPrompt, validatePendingPrompt, clearPendingPrompt, storePromptForValidation } from '../utils/authRedirectUtils';
+import { useTheme } from '../context/ThemeContext';
+import LoadingAnimation from '../components/common/LoadingAnimation';
 
 const RoadmapQuestionsPage = () => {
   const [learningTopic, setLearningTopic] = useState('');
@@ -16,6 +18,29 @@ const RoadmapQuestionsPage = () => {
     question2: '',
     question3: ''
   });
+  const { darkMode } = useTheme();
+
+  // Define colors based on theme - Using the provided color palette from HomePage
+  const colors = {
+    // Primary and accent colors
+    primary: darkMode ? '#4F46E5' : '#4F46E5', // Indigo - main brand color
+    secondary: darkMode ? '#DA2C38' : '#DA2C38', // YouTube Red - accent color
+    accent: darkMode ? '#8B5CF6' : '#8B5CF6', // Purple - complementary accent
+    
+    // Background colors
+    background: darkMode ? '#111827' : '#F9F9F9', // Dark Gray / Light Gray
+    cardBg: darkMode ? '#1E293B' : '#FFFFFF', // Darker background / White
+    
+    // Text colors
+    text: darkMode ? '#F9F9F9' : '#111827', // Light Gray / Dark Gray
+    textMuted: darkMode ? '#94A3B8' : '#6B7280', // Light gray / Medium gray
+    
+    // UI elements
+    border: darkMode ? '#334155' : '#E5E7EB', // Medium-dark gray / Light gray
+    codeBg: darkMode ? '#0F172A' : '#F3F4F6', // Dark blue-black / Light gray
+    codeText: darkMode ? '#4F46E5' : '#4F46E5', // Indigo for consistency
+    shadow: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)', // Shadows
+  };
 
   useEffect(() => {
     // Check if we have a pending learning topic from before login
@@ -185,9 +210,13 @@ const RoadmapQuestionsPage = () => {
   const renderQuestion = () => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
-          <p className="text-gray-600 font-mukta">Generating personalized questions...</p>
+        <div className="flex flex-col items-center justify-center py-8 sm:py-12">
+          <LoadingAnimation 
+            type="inline" 
+            variant="roadmap" 
+            message="Generating personalized questions..." 
+            size="small"
+          />
         </div>
       );
     }
@@ -197,7 +226,8 @@ const RoadmapQuestionsPage = () => {
         <div className="space-y-4">
           <label 
             htmlFor={`question-${currentQuestion + 1}`}
-            className="block text-2xl font-semibold font-poppins"
+            className="block text-xl sm:text-2xl font-semibold font-poppins"
+            style={{ color: colors.text }}
           >
             {questions[currentQuestion]}
           </label>
@@ -206,10 +236,39 @@ const RoadmapQuestionsPage = () => {
             value={answers[`question${currentQuestion + 1}`] || ''}
             onChange={handleTextChange}
             placeholder="Type your answer here..."
-            className="w-full p-6 rounded-xl border-2 border-orange-200 focus:border-orange-400 focus:outline-none shadow-lg text-lg font-mukta resize-none"
+            className="w-full p-4 sm:p-6 rounded-xl shadow-lg text-base sm:text-lg font-mukta resize-none"
+            style={{ 
+              color: colors.text, 
+              backgroundColor: colors.cardBg,
+              borderWidth: '2px',
+              borderColor: darkMode ? colors.border : colors.primary + '40',
+              borderStyle: 'solid'
+            }}
             rows={4}
             aria-label={questions[currentQuestion]}
           />
+          
+          {/* ProTip for the third question */}
+          {currentQuestion === 2 && (
+            <div className="mt-4 p-3 sm:p-4 rounded-lg bg-opacity-20 flex items-start gap-2 sm:gap-3"
+                 style={{ 
+                   backgroundColor: darkMode ? 'rgba(79, 70, 229, 0.15)' : 'rgba(79, 70, 229, 0.1)',
+                   borderLeft: '3px solid rgb(79, 70, 229)'
+                 }}>
+              <div className="shrink-0 mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="rgb(79, 70, 229)">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium text-sm sm:text-base" style={{ color: colors.text }}>ProTip</p>
+                <p className="text-xs sm:text-sm" style={{ color: colors.textMuted }}>
+                  For the best learning experience, consider choosing "comprehensive coverage" 
+                  which provides a more complete roadmap with in-depth resources.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -223,25 +282,41 @@ const RoadmapQuestionsPage = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(to bottom, #FFF7ED, #FFFFFF)' }}>
+    <div className="min-h-screen relative overflow-hidden transition-colors duration-300" 
+      style={{ 
+        background: darkMode 
+          ? `linear-gradient(to bottom, ${colors.background}, #0F172A)` 
+          : `linear-gradient(to bottom, #FFF7ED, #FFFFFF)` 
+      }}>
       <HeroAnimation />
       
-      <div className="max-w-3xl mx-auto px-4 pt-24 pb-16">
-        <div className="bg-white p-8 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-bold mb-8 text-center font-poppins" style={{
-            background: 'linear-gradient(to right, #EA580C, #9333EA)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16 sm:pt-20 md:pt-24 pb-10 sm:pb-16">
+        <div className="rounded-xl shadow-lg p-4 sm:p-6 md:p-8 transition-colors duration-300"
+             style={{ 
+               backgroundColor: colors.cardBg,
+               boxShadow: `0 10px 25px -5px ${colors.shadow}`
+             }}>
+          <h1 
+            className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center font-poppins bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] bg-clip-text text-transparent"
+            style={{
+              '--primary': 'rgb(79, 70, 229)',
+              '--accent': 'rgb(139, 92, 246)',
+            }}
+          >
             Let's Personalize Your {learningTopic} Roadmap
           </h1>
           
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             <div className="flex justify-between mb-2">
               {[0, 1, 2].map((step) => (
                 <div 
                   key={step} 
-                  className={`h-1.5 rounded-full mx-1 transition-all duration-500 ${step === currentQuestion ? 'w-full bg-orange-500' : 'w-full bg-gray-200'}`}
+                  className={`h-1.5 rounded-full mx-1 transition-all duration-500 ${step === currentQuestion ? 'w-full' : 'w-full'}`}
+                  style={{ 
+                    backgroundColor: step === currentQuestion 
+                      ? colors.primary 
+                      : darkMode ? colors.border : '#E5E7EB'
+                  }}
                   role="progressbar"
                   aria-valuenow={step}
                   aria-valuemin="0"
@@ -249,7 +324,8 @@ const RoadmapQuestionsPage = () => {
                 />
               ))}
             </div>
-            <p className="text-center text-gray-500 font-mukta mt-3">
+            <p className="text-center mt-3 font-mukta text-sm sm:text-base"
+               style={{ color: colors.textMuted }}>
               {getProgressText()}
             </p>
           </div>
@@ -257,28 +333,43 @@ const RoadmapQuestionsPage = () => {
           <div>
             {renderQuestion()}
             
-            <div className="flex justify-between mt-10">
+            <div className="flex justify-between mt-8 sm:mt-10">
               {currentQuestion > 0 && (
                 <button
                   type="button"
                   onClick={goToPrevQuestion}
-                  className="text-gray-700 border-2 border-gray-300 px-6 py-3 rounded-xl font-medium shadow-sm text-base hover:bg-gray-50"
+                  className="px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium shadow-sm text-sm sm:text-base transition-all"
+                  style={{ 
+                    color: darkMode ? colors.textMuted : colors.text,
+                    backgroundColor: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                    border: `2px solid ${darkMode ? colors.border : colors.border}`
+                  }}
                   aria-label="Go to previous question"
                 >
                   Back
                 </button>
               )}
               
-              <div className="ml-auto">
+              <div className={`${currentQuestion > 0 ? 'ml-auto' : 'mx-auto'}`}>
                 <button
                   type="button"
                   onClick={goToNextQuestion}
                   disabled={!answers[`question${currentQuestion + 1}`]?.trim()}
-                  className={`px-6 py-3 rounded-xl font-medium shadow-sm text-base ${
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium shadow-sm text-sm sm:text-base transition-all ${
                     answers[`question${currentQuestion + 1}`]?.trim()
-                      ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white hover:shadow-lg transform hover:scale-105 transition-all'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      ? 'hover:shadow-lg transform hover:scale-105 transition-all bg-gradient-to-r from-[var(--primary-btn)] to-[var(--accent-btn)] text-white'
+                      : 'opacity-50 cursor-not-allowed'
                   }`}
+                  style={{ 
+                    '--primary-btn': answers[`question${currentQuestion + 1}`]?.trim() ? 'rgb(79, 70, 229)' : 'transparent',
+                    '--accent-btn': answers[`question${currentQuestion + 1}`]?.trim() ? 'rgb(139, 92, 246)' : 'transparent',
+                    backgroundColor: !answers[`question${currentQuestion + 1}`]?.trim() 
+                      ? darkMode ? 'rgba(75, 85, 99, 0.5)' : 'rgba(209, 213, 219, 0.5)' 
+                      : undefined,
+                    color: !answers[`question${currentQuestion + 1}`]?.trim() 
+                      ? darkMode ? colors.textMuted : '#6B7280'
+                      : undefined
+                  }}
                   aria-label={currentQuestion === 2 ? 'Generate roadmap' : 'Go to next question'}
                 >
                   {currentQuestion === 2 ? 'Generate Roadmap' : 'Next'}

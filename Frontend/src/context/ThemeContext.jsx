@@ -24,6 +24,25 @@ export const ThemeProvider = ({ children }) => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
+  // Track if device is mobile
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check if device is mobile
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Initial check
+    checkIfMobile();
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
+
   // Effect to handle theme changes
   useEffect(() => {
     // Save to localStorage
@@ -32,8 +51,18 @@ export const ThemeProvider = ({ children }) => {
     // Apply dark mode class to the document's root element
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.add('theme-transition');
+      // Add a small delay to ensure transitions apply
+      setTimeout(() => {
+        document.documentElement.classList.remove('theme-transition');
+      }, 300);
     } else {
+      document.documentElement.classList.add('theme-transition');
       document.documentElement.classList.remove('dark');
+      // Add a small delay to ensure transitions apply
+      setTimeout(() => {
+        document.documentElement.classList.remove('theme-transition');
+      }, 300);
     }
   }, [darkMode]);
 
@@ -45,7 +74,8 @@ export const ThemeProvider = ({ children }) => {
   // Provider values
   const value = {
     darkMode,
-    toggleDarkMode
+    toggleDarkMode,
+    isMobile
   };
 
   return (

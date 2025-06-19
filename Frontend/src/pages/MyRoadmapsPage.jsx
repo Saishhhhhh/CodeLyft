@@ -242,7 +242,7 @@ const MyRoadmapsPage = () => {
   const hasFilteredResults = filteredRegularRoadmaps.length > 0 || filteredCustomRoadmaps.length > 0;
   
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: theme.background }}>
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'dark' : ''}`} style={{ backgroundColor: theme.background }}>
       <Navbar />
       
             <motion.main

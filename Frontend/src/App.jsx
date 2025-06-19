@@ -16,6 +16,8 @@ import MyRoadmapsPage from './pages/MyRoadmapsPage';
 import RoadmapDetailPage from './pages/RoadmapDetailPage';
 import CustomRoadmapPage from './pages/CustomRoadmapPage';
 import NotFoundPage from './pages/NotFoundPage';
+import LoadingTestPage from './pages/LoadingTestPage';
+import AboutPage from './pages/AboutPage';
 import GlobalResourceModal from './components/GlobalResourceModal';
 import { useAuth } from './context/AuthContext';
 import { CustomRoadmapProvider } from './context/CustomRoadmapContext';
@@ -24,21 +26,11 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ResourceModalProvider } from './context/ResourceModalContext';
 import { useEffect } from 'react';
 import { hasPendingPrompt } from './utils/authRedirectUtils';
+import LoadingAnimation from './components/common/LoadingAnimation';
 
 // Loading component with enhanced styling
 const LoadingScreen = () => {
-  const { darkMode } = useTheme();
-  
-  const bgColor = darkMode ? '#0F172A' : '#ffffff';
-  const spinnerColor = darkMode ? '#8B5CF6' : '#4F46E5';
-  const textColor = darkMode ? '#F8FAFC' : '#111827';
-  
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen" style={{ backgroundColor: bgColor }}>
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mb-4" style={{ borderColor: spinnerColor }}></div>
-      <p style={{ color: textColor }}>Loading...</p>
-    </div>
-  );
+  return <LoadingAnimation type="fullscreen" variant="default" size="medium" />;
 };
 
 // Protected route component
@@ -91,11 +83,6 @@ const OAuthCallback = () => {
   const { loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { darkMode } = useTheme();
-  
-  const bgColor = darkMode ? '#0F172A' : '#ffffff';
-  const spinnerColor = darkMode ? '#8B5CF6' : '#4F46E5';
-  const textColor = darkMode ? '#F8FAFC' : '#111827';
   
   useEffect(() => {
     // Check if there's an error or token in the URL
@@ -133,12 +120,7 @@ const OAuthCallback = () => {
   }, [loading, location, navigate]);
   
   // Show loading spinner while processing
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen" style={{ backgroundColor: bgColor }}>
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mb-4" style={{ borderColor: spinnerColor }}></div>
-      <p style={{ color: textColor }}>Completing authentication...</p>
-    </div>
-  );
+  return <LoadingAnimation type="fullscreen" variant="default" message="Completing authentication..." />;
 };
 
 function App() {
@@ -278,6 +260,11 @@ function App() {
                 <HomePage />
               </MainLayout>
             } />
+            <Route path="/about" element={
+              <MainLayout>
+                <AboutPage />
+              </MainLayout>
+            } />
             <Route path="/questions" element={
               <ProtectedRoute>
                 <MainLayout>
@@ -305,6 +292,13 @@ function App() {
                   <RoadmapProgressPage />
                 </MainLayout>
               </ProtectedRoute>
+            } />
+            
+            {/* Loading Test Page */}
+            <Route path="/loading-test" element={
+              <MainLayout>
+                <LoadingTestPage />
+              </MainLayout>
             } />
             
             {/* 404 Not Found */}

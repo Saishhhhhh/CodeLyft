@@ -3,9 +3,47 @@
 
 @import "tailwindcss";
 
+/* Base Styles */
+:root {
+  --color-primary: #4F46E5;
+  --color-primary-hover: #4338CA;
+  --color-secondary: #8B5CF6;
+  --color-secondary-hover: #7C3AED;
+  --color-background: #FFFFFF;
+  --color-background-alt: #F9FAFB;
+  --color-text: #111827;
+  --color-text-muted: #6B7280;
+  --color-border: #E5E7EB;
+  --color-input: #F3F4F6;
+  --color-card: #FFFFFF;
+  --color-code-bg: #F3F4F6;
+  --color-code-text: #4F46E5;
+  --color-shadow: rgba(0, 0, 0, 0.1);
+}
+
+.dark {
+  --color-primary: #6366F1;
+  --color-primary-hover: #4F46E5;
+  --color-secondary: #8B5CF6;
+  --color-secondary-hover: #7C3AED;
+  --color-background: #0F172A;
+  --color-background-alt: #1E293B;
+  --color-text: #F8FAFC;
+  --color-text-muted: #94A3B8;
+  --color-border: #334155;
+  --color-input: #1E293B;
+  --color-card: #1E293B;
+  --color-code-bg: #111827;
+  --color-code-text: #A5B4FC;
+  --color-shadow: rgba(0, 0, 0, 0.5);
+}
+
 body {
   margin: 0;
   font-family: 'Poppins', sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .font-poppins {
@@ -91,4 +129,46 @@ body {
 
 .dark .tech-name {
   color: #d1d5db;
+}
+
+/* Chat-specific Styles */
+.markdown-content ul {
+  list-style-type: disc;
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content a {
+  text-decoration: underline;
+  color: var(--color-secondary);
+}
+
+.markdown-content code {
+  background-color: var(--color-code-bg);
+  color: var(--color-code-text);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+.animation-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animation-delay-400 {
+  animation-delay: 0.4s;
+}
+
+/* Theme Transition */
+.theme-transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
 }
