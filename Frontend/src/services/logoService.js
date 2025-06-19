@@ -9,15 +9,13 @@ const logoResultCache = {};
 
 // Local storage keys
 const LS_PRIMARY_LOGOS = 'codelyft_primary_logos';
-const LS_SECONDARY_LOGOS = 'codelyft_secondary_logos';
 const LS_TECH_ALIASES = 'codelyft_tech_aliases';
 const LS_CACHE_VERSION = 'codelyft_cache_version';
 const CACHE_VERSION = '1.0'; // Increment when logo structure changes
 
 // Store loaded mappings - initialized empty and loaded on demand
 let logoMappings = {
-  primary: null, // Will be loaded on demand
-  secondary: null // Will be loaded on demand
+  primary: null // Will be loaded on demand
 };
 
 // Store tech aliases mapping
@@ -27,7 +25,6 @@ let canonicalToAliases = null; // Will be loaded on demand
 // Track loading promises to prevent duplicate requests
 let loadingPromises = {
   primary: null,
-  secondary: null,
   aliases: null
 };
 
@@ -186,54 +183,53 @@ const loadTechAliases = async () => {
 };
 
 /**
- * Load logo mappings for a specific type (primary or secondary)
- * @param {string} type - 'primary' or 'secondary'
+ * Load logo mappings for primary logos
  * @returns {Promise<Object>} - Promise resolving to the logo mappings
  */
-const loadLogoMappingsForType = async (type) => {
+const loadLogoMappings = async () => {
   // Return cached mappings if already loaded
-  if (logoMappings[type]) {
-    return logoMappings[type];
+  if (logoMappings.primary) {
+    return logoMappings.primary;
   }
   
   // Use existing promise if already loading
-  if (loadingPromises[type]) {
-    return loadingPromises[type];
+  if (loadingPromises.primary) {
+    return loadingPromises.primary;
   }
   
   // Check localStorage cache if cache version is valid
   if (isCacheValid()) {
-    const cachedMappings = loadFromStorage(`codelyft_${type}_logos`, null);
+    const cachedMappings = loadFromStorage(LS_PRIMARY_LOGOS, null);
     if (cachedMappings) {
-      logoMappings[type] = cachedMappings;
+      logoMappings.primary = cachedMappings;
       return cachedMappings;
     }
   }
   
   // Load from server
-  loadingPromises[type] = new Promise(async (resolve) => {
+  loadingPromises.primary = new Promise(async (resolve) => {
     try {
-      console.log(`Loading ${type} logo mappings from /logos/${type}-logos.json`);
-      const response = await axios.get(`/logos/${type}-logos.json`);
+      console.log('Loading primary logo mappings from /logos/primary-logos.json');
+      const response = await axios.get('/logos/primary-logos.json');
       const mappings = response.data;
-      console.log(`Successfully loaded ${type} logo mappings with ${Object.keys(mappings).length} entries`);
+      console.log(`Successfully loaded primary logo mappings with ${Object.keys(mappings).length} entries`);
       
       // Cache the results
-      logoMappings[type] = mappings;
+      logoMappings.primary = mappings;
       
       // Save to localStorage
-      saveToStorage(`codelyft_${type}_logos`, mappings);
+      saveToStorage(LS_PRIMARY_LOGOS, mappings);
       
       resolve(mappings);
     } catch (error) {
-      console.error(`Error loading ${type} logo mappings:`, error);
+      console.error('Error loading primary logo mappings:', error);
       resolve({});
     } finally {
-      loadingPromises[type] = null;
+      loadingPromises.primary = null;
     }
   });
   
-  return loadingPromises[type];
+  return loadingPromises.primary;
 };
 
 /**
@@ -357,7 +353,7 @@ export const findLogo = (techName) => {
       logoResultCache[techName] = {
         ...result,
         alt: `${techName} logo`,
-        className: `tech-logo ${result.isSecondary ? 'tech-logo-secondary' : ''}`
+        className: 'tech-logo'
       };
       
       // Trigger a UI update by dispatching a custom event
@@ -432,7 +428,7 @@ export const findLogoAsync = async (techName) => {
   
   // 4. Try direct match in primary logos (load if needed)
   if (!logoMappings.primary) {
-    await loadLogoMappingsForType('primary');
+    await loadLogoMappings();
   }
   
   if (logoMappings.primary[normalized]) {
@@ -487,61 +483,7 @@ export const findLogoAsync = async (techName) => {
     }
   }
   
-  // 8. Only load secondary logos if we haven't found a match in primary
-  if (!logoMappings.secondary) {
-    await loadLogoMappingsForType('secondary');
-  }
-  
-  // 9. Try direct match in secondary logos
-  if (logoMappings.secondary[normalized]) {
-    return {
-      path: `/logos/secondary/${logoMappings.secondary[normalized]}`,
-      isSecondary: true
-    };
-  }
-  
-  // 10. Try alternative matches for secondary logos
-  for (const alt of alternatives) {
-    // Check secondary collection
-    if (logoMappings.secondary[alt]) {
-      return {
-        path: `/logos/secondary/${logoMappings.secondary[alt]}`,
-        isSecondary: true,
-        isAlternative: true
-      };
-    }
-  }
-  
-  // 11. Try canonical name in secondary logos
-  if (canonicalName) {
-    normalized = normalizeTechName(canonicalName);
-    
-    // Try direct match with canonical name in secondary logos
-    if (logoMappings.secondary[normalized]) {
-      return {
-        path: `/logos/secondary/${logoMappings.secondary[normalized]}`,
-        isSecondary: true,
-        isCanonical: true
-      };
-    }
-    
-    // Try aliases from canonical name in secondary logos
-    if (canonicalToAliases[canonicalName]) {
-      for (const alias of canonicalToAliases[canonicalName]) {
-        const normalizedAlias = normalizeTechName(alias);
-        
-        if (logoMappings.secondary[normalizedAlias]) {
-          return {
-            path: `/logos/secondary/${logoMappings.secondary[normalizedAlias]}`,
-            isSecondary: true,
-            isAlternative: true
-          };
-        }
-      }
-    }
-  }
-  
-  // 12. Return default if no match
+  // 8. Return default if no match
   return {
     path: '/logos/default-tech-icon.svg',
     isDefault: true
@@ -605,6 +547,6 @@ export const warmupLogoCache = () => {
   
   scheduleWhenIdle(() => {
     console.log('Warming up logo cache in background...');
-    loadLogoMappingsForType('primary');
+    loadLogoMappings();
   });
 }; 

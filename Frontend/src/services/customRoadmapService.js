@@ -34,7 +34,8 @@ export const saveCustomRoadmap = async (roadmapData) => {
     // Make sure we use name consistently across the app
     const formattedRoadmap = {
       ...roadmapData,
-      name: roadmapData.name || roadmapData.title, // Handle both formats
+      title: roadmapData.title || roadmapData.name, // Ensure title is set
+      name: roadmapData.name || roadmapData.title, // Ensure name is set
       clientId: roadmapData.id, // Ensure client ID is passed
       isCustom: true // Always set isCustom flag for custom roadmaps
     };
@@ -121,7 +122,8 @@ export const updateCustomRoadmap = async (roadmapId, roadmapData) => {
     // Make sure we use name consistently across the app
     const formattedRoadmap = {
       ...roadmapData,
-      name: roadmapData.name || roadmapData.title, // Handle both formats
+      title: roadmapData.title || roadmapData.name, // Ensure title is set
+      name: roadmapData.name || roadmapData.title, // Ensure name is set
       clientId: roadmapData.id, // Ensure client ID is passed
       isCustom: true // Always set isCustom flag for custom roadmaps
     };
@@ -168,7 +170,8 @@ const saveCustomRoadmapLocally = (roadmapData) => {
     // Add metadata for local storage
     const roadmapToSave = {
       ...roadmapData,
-      name: roadmapData.name || roadmapData.title, // Handle both formats
+      title: roadmapData.title || roadmapData.name, // Ensure title is set
+      name: roadmapData.name || roadmapData.title, // Ensure name is set
       id: roadmapData.id || `local-${Date.now()}`,
       savedAt: new Date().toISOString(),
       isLocal: true,
@@ -200,7 +203,8 @@ const updateLocalCustomRoadmap = (roadmapId, roadmapData) => {
         return {
           ...roadmap,
           ...roadmapData,
-          name: roadmapData.name || roadmapData.title, // Handle both formats
+          title: roadmapData.title || roadmapData.name, // Ensure title is set
+          name: roadmapData.name || roadmapData.title, // Ensure name is set
           updatedAt: new Date().toISOString()
         };
       }

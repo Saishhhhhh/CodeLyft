@@ -287,7 +287,6 @@
       {
         "canonical": "javascript",
         "aliases": [
-          "js",
           "ecmascript",
           "es"
         ],
@@ -496,6 +495,7 @@
       {
         "canonical": "node js",
         "aliases": [
+          "nodejs",
           "node",
           "node.js",
           "node js"

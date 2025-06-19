@@ -1509,7 +1509,7 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
           
           const result = await searchYouTube(
             pattern, 
-            10, // Reduced from 15 to 10
+            8, // Reduced from 10 to 8
             { minDuration: minDuration }
           );
           
@@ -1664,6 +1664,8 @@ export const findBestVideoForTopic = async (topic, isAdvancedTopic = false, road
         console.error('Error searching for individual videos:', error);
       }
     }
+    
+    // Continue with final processing
     
     // Only consider videos that meet minimum quality threshold (rating ≥ 3.0, otherwise rejected)
     if (highestRatedVideo && highestRating >= 3.0) {

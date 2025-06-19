@@ -16,10 +16,12 @@ import MyRoadmapsPage from './pages/MyRoadmapsPage';
 import RoadmapDetailPage from './pages/RoadmapDetailPage';
 import CustomRoadmapPage from './pages/CustomRoadmapPage';
 import NotFoundPage from './pages/NotFoundPage';
+import GlobalResourceModal from './components/GlobalResourceModal';
 import { useAuth } from './context/AuthContext';
 import { CustomRoadmapProvider } from './context/CustomRoadmapContext';
 import { ChatbotProvider } from './context/ChatbotContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ResourceModalProvider } from './context/ResourceModalContext';
 import { useEffect } from 'react';
 import { hasPendingPrompt } from './utils/authRedirectUtils';
 
@@ -144,6 +146,7 @@ function App() {
     <ThemeProvider>
       <ChatbotProvider>
         <CustomRoadmapProvider>
+          <ResourceModalProvider>
           <Routes>
             {/* Public routes (accessible only when not logged in) */}
             <Route 
@@ -307,6 +310,10 @@ function App() {
             {/* 404 Not Found */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+            
+            {/* Global Resource Modal */}
+            <GlobalResourceModal />
+          </ResourceModalProvider>
         </CustomRoadmapProvider>
       </ChatbotProvider>
     </ThemeProvider>

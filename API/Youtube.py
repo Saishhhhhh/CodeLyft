@@ -1154,7 +1154,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
     print(f"Finding best playlist for: {query}")
     
     # Search for playlists
-    playlists_response = search_playlists(query, limit=10)
+    playlists_response = search_playlists(query, limit=6)
     
     if not playlists_response or 'results' not in playlists_response:
         print("No playlists found")

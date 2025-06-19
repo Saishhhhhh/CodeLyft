@@ -11,15 +11,13 @@ import { useTheme } from '../../../context/ThemeContext';
  * @param {string} props.className - Additional CSS classes
  * @param {boolean} props.showName - Whether to show the technology name alongside the logo
  * @param {string} props.namePosition - Position of the name (right, bottom)
- * @param {Object} props.colorFilter - Custom color filter for secondary logos
  */
 const TechLogo = ({ 
   techName, 
   size = 'md', 
   className = '', 
   showName = false,
-  namePosition = 'right',
-  colorFilter = null
+  namePosition = 'right'
 }) => {
   const [logoInfo, setLogoInfo] = useState(null);
   const [error, setError] = useState(false);
@@ -70,24 +68,12 @@ const TechLogo = ({
     );
   }
 
-  // Determine if we need to apply a color filter (for black SVGs)
-  const filterStyle = logoInfo.isSecondary && colorFilter ? {
-    filter: typeof colorFilter === 'string' ? colorFilter : 
-      'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%)'
-  } : {};
-  
-  // Apply additional filter for dark mode for better visibility
-  if (darkMode && logoInfo.isSecondary) {
-    filterStyle.filter = 'brightness(1.2) contrast(1.2)';
-  }
-
   return (
     <div className={`tech-logo-container ${showName ? `with-name name-${namePosition}` : ''} ${className}`}>
       <img
         src={logoInfo.path}
         alt={logoInfo.alt}
         className={`tech-logo ${getSizeClass(size)} ${logoInfo.className || ''}`}
-        style={filterStyle}
         onError={handleError}
       />
       

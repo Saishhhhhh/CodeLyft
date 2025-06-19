@@ -12,9 +12,7 @@ const __dirname = path.dirname(__filename);
 
 // Paths to logo directories
 const primaryDir = path.join(__dirname, '../public/logos/primary');
-const secondaryDir = path.join(__dirname, '../public/logos/secondary');
 const outputPrimaryJSON = path.join(__dirname, '../public/logos/primary-logos.json');
-const outputSecondaryJSON = path.join(__dirname, '../public/logos/secondary-logos.json');
 
 /**
  * Generate a mapping from directory of SVG files
@@ -56,10 +54,5 @@ function writeMapping(mapping, outputFile) {
 console.log('Generating primary logo mappings...');
 const primaryMapping = generateMappingFromDir(primaryDir);
 writeMapping(primaryMapping, outputPrimaryJSON);
-
-// Generate and write secondary mappings
-console.log('Generating secondary logo mappings...');
-const secondaryMapping = generateMappingFromDir(secondaryDir);
-writeMapping(secondaryMapping, outputSecondaryJSON);
 
 console.log('Done!'); 
