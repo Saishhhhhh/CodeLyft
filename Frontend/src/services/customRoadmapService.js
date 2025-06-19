@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API URL configuration
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_AUTH_API_URL;
 
 // Create axios instance with credentials
 const api = axios.create({

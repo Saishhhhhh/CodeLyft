@@ -2,7 +2,8 @@ import axios from 'axios';
 
 // Create axios instance with base URL and credentials
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  // baseURL: 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_AUTH_API_URL,
   withCredentials: true // Important for cookies
 });
 
@@ -115,14 +116,14 @@ export const isAuthenticated = () => {
  * Initiate Google OAuth login
  */
 export const loginWithGoogle = () => {
-  window.location.href = 'http://localhost:5000/api/auth/google';
+  window.location.href = import.meta.env.VITE_GOOGLE_OAUTH_URL;
 };
 
 /**
  * Initiate GitHub OAuth login
  */
 export const loginWithGithub = () => {
-  window.location.href = 'http://localhost:5000/api/auth/github';
+  window.location.href = import.meta.env.VITE_GITHUB_OAUTH_URL;
 };
 
 /**

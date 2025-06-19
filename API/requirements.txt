@@ -1,6 +1,8 @@
+requests==2.26.0
+python-dotenv==0.19.0 
 fastapi==0.104.1
 pydantic==2.4.2
 uvicorn==0.23.2
 sentence-transformers==2.2.2
 torch>=2.0.0
-numpy>=1.22.0 
+numpy==1.22.0 

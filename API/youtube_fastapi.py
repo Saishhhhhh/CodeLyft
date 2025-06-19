@@ -49,13 +49,18 @@ app = FastAPI(
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
     expose_headers=["Content-Length"],
     max_age=3600,
 )
+
+@app.get("/")
+async def root():
+    return {"message": "YouTube API is running 🚀"}
+
 
 # Global variables for technology matching
 tech_model = None
@@ -484,19 +489,9 @@ if __name__ == "__main__":
         os.environ["GROQ_MODEL"] = os.environ["GROQ_MODEL"]
     
     logger.info("Starting YouTube API server...")
-    logger.info("Server URL: http://localhost:8000")
-    logger.info("API Documentation: http://localhost:8000/docs")
-    logger.info("ReDoc Documentation: http://localhost:8000/redoc")
     uvicorn.run(
         "youtube_fastapi:app", 
         host="0.0.0.0", 
-        port=8000, 
-        reload=True,
-        reload_delay=1,
-        workers=1,
-        reload_excludes=["__pycache__"],
-        reload_includes=["*.py"],
-        reload_dirs=["./"],
-        use_colors=True,
+        port=int(os.environ.get("PORT", 8000)), 
         log_level="info"
     ) 

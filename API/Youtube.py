@@ -26,10 +26,10 @@ try:
     from relevance_checker import check_batch_relevance, preprocess_title
     HAS_RELEVANCE_CHECKER = True
 except ImportError:
-    print("Warning: relevance_checker module not found. Relevance checking will be unavailable.")
+    # print("Warning: relevance_checker module not found. Relevance checking will be unavailable.")
     HAS_RELEVANCE_CHECKER = False
     def check_batch_relevance(titles, query):
-        print("Relevance checking unavailable: relevance_checker module not found")
+        #print("Relevance checking unavailable: relevance_checker module not found")
         return None
     def preprocess_title(title, max_length=200):
         return title
@@ -49,7 +49,7 @@ try:
     from youtube_custom_playlist import CustomPlaylist
     HAS_CUSTOM_PLAYLIST = True
 except ImportError:
-    print("Note: Advanced playlist functionality unavailable. Using fallback methods.")
+    ##print("Note: Advanced playlist functionality unavailable. Using fallback methods.")
     HAS_CUSTOM_PLAYLIST = False
 
 # ===== UTILITY FUNCTIONS =====
@@ -91,13 +91,13 @@ def clean_repeated_title(data: Dict[str, Any]) -> Dict[str, Any]:
                 data["title"] = preprocess_title(data["title"], max_length=200)
                 
                 # Log if title was modified
-                if original_title != data["title"] and len(original_title) > 50:
-                    print(f"Title cleaned: {len(original_title)} chars -> {len(data['title'])} chars")
-                    if len(original_title) > 100:
-                        print(f"Original (truncated): {original_title[:40]}...{original_title[-40:]}")
-                    else:
-                        print(f"Original: {original_title}")
-                    print(f"Cleaned: {data['title']}")
+                # if original_title != data["title"] and len(original_title) > 50:
+                #     print(f"Title cleaned: {len(original_title)} chars -> {len(data['title'])} chars")
+                #     if len(original_title) > 100:
+                #         print(f"Original (truncated): {original_title[:40]}...{original_title[-40:]}")
+                #     else:
+                #         print(f"Original: {original_title}")
+                #     print(f"Cleaned: {data['title']}")
             else:
                 # Fallback cleaning if preprocess_title is not available
                 # Remove excessive repetition using regex
@@ -126,7 +126,7 @@ def clean_repeated_title(data: Dict[str, Any]) -> Dict[str, Any]:
                 
                 # Truncate if still too long
                 if len(current_title) > 200:
-                    print(f"Title too long ({len(title)} chars), truncating to 200 chars")
+                    #print(f"Title too long ({len(title)} chars), truncating to 200 chars")
                     current_title = current_title[:200] + "..."
                 
                 data["title"] = current_title
@@ -161,13 +161,13 @@ def extract_video_id(url):
             video_id = url
             
         if len(video_id) != 11:
-            print(f"Warning: Extracted ID '{video_id}' is not 11 characters long")
+            #print(f"Warning: Extracted ID '{video_id}' is not 11 characters long")
             if len(video_id) > 11:
                 video_id = video_id[:11]
         
         return video_id
     except Exception as e:
-        print(f"Error extracting video ID: {e}")
+        #print(f"Error extracting video ID: {e}")
         return url
 
 def extract_playlist_id(url):
@@ -186,7 +186,7 @@ def extract_playlist_id(url):
             # Assume it's already a playlist ID
             return url
     except Exception as e:
-        print(f"Error extracting playlist ID: {e}")
+        #print(f"Error extracting playlist ID: {e}")
         return url  # Return as-is
 
 def check_yt_dlp():
@@ -276,7 +276,8 @@ def search_youtube(query, limit=8, content_type=None, min_duration=None, max_dur
                             }
                             videos.append(video)
                 except json.JSONDecodeError:
-                    print(f"Error parsing JSON: {line}")
+                    print()
+                    # print(f"Error parsing JSON: {line}")
             
             # Return results directly without fetching detailed info
             return {
@@ -286,7 +287,7 @@ def search_youtube(query, limit=8, content_type=None, min_duration=None, max_dur
                 "source": "yt-dlp"
             }
         except Exception as e:
-            print(f"yt-dlp error: {e}")
+            #print(f"yt-dlp error: {e}")
             return search_youtube_web(query, limit, content_type, min_duration, max_duration)
     
     # Web scraping fallback
@@ -434,7 +435,7 @@ def get_video_details(video_id_or_url):
             "source": "web_fallback"
         }
     except Exception as e:
-        print(f"Web fallback error: {e}")
+        #print(f"Web fallback error: {e}")
         return {
             "id": video_id,
             "title": "Could not retrieve video info",
@@ -469,7 +470,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
     # Try using the CustomPlaylist implementation if available
     if HAS_CUSTOM_PLAYLIST:
         try:
-            print(f"Fetching playlist using CustomPlaylist: {playlist_id}")
+            #print(f"Fetching playlist using CustomPlaylist: {playlist_id}")
             playlist = CustomPlaylist(playlist_id)
             
             # Use asyncio to directly fetch all videos using our fetch_playlist method
@@ -481,7 +482,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                 loop.close()
                 
                 if not success or not playlist.videos:
-                    print("Error fetching playlist or no videos found")
+                    #print("Error fetching playlist or no videos found")
                     return {
                         "id": playlist_id,
                         "title": playlist.info.get('title', 'Unknown Playlist'),
@@ -491,13 +492,13 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                         "source": "custom_playlist"
                     }
             except Exception as e:
-                print(f"Error running async fetch_playlist: {e}")
+                #print(f"Error running async fetch_playlist: {e}")
                 import traceback
                 traceback.print_exc()
                 
                 # If we failed to fetch videos with the async method, try the regular method
             if not playlist.videos:
-                print("No videos found in playlist")
+                #print("No videos found in playlist")
                 return {
                     "id": playlist_id,
                     "title": playlist.info.get('title', 'Unknown Playlist'),
@@ -510,7 +511,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
             # If we have a limit, respect it
             if limit > 0 and len(playlist.videos) > limit:
                 playlist.videos = playlist.videos[:limit]
-                print(f"Limited videos to {limit} as requested")
+                #print(f"Limited videos to {limit} as requested")
             
             # Format the videos to match our expected structure
             formatted_videos = []
@@ -527,10 +528,10 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
             
             # Get detailed info for ONLY the first video (if available) for scoring purposes
             if formatted_videos and max_details > 0:
-                print(f"\nFetching detailed information for first video for scoring purposes...")
+                #print(f"\nFetching detailed information for first video for scoring purposes...")
                 try:
                     first_video = formatted_videos[0]
-                    print(f"Getting details for first video: {first_video['title'][:30]}...")
+                    #print(f"Getting details for first video: {first_video['title'][:30]}...")
                     details = get_video_details(first_video["id"])
                     if "likes" in details:
                         first_video["likes"] = details["likes"]
@@ -546,8 +547,8 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                 except Exception as e:
                     print(f"Error getting details for first video: {e}")
             
-            # Print debugging info for the playlist title
-            print(f"Raw playlist info: {playlist.info}")
+            # #print debugging info for the playlist title
+            #print(f"Raw playlist info: {playlist.info}")
             
             # Get title from the playlist info
             playlist_title = playlist.info.get('title')
@@ -558,7 +559,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                         info_cmd = ["yt-dlp", "--flat-playlist", "--skip-download", "--print", "%(playlist_title)s", playlist_url]
                         info_result = subprocess.run(info_cmd, capture_output=True, text=True, check=True)
                         playlist_title = info_result.stdout.strip() or "Unknown Playlist"
-                        print(f"Got playlist title from yt-dlp: {playlist_title}")
+                        #print(f"Got playlist title from yt-dlp: {playlist_title}")
                 except Exception as e:
                     print(f"Failed to get playlist title from yt-dlp: {e}")
             
@@ -585,7 +586,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
                 
             return result
         except Exception as e:
-            print(f"CustomPlaylist error: {e}")
+            #print(f"CustomPlaylist error: {e}")
             import traceback
             traceback.print_exc()
     
@@ -695,7 +696,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
         if videos and max_details > 0:
             try:
                 first_video = videos[0]
-                print(f"Getting details for first video: {first_video['title'][:30]}...")
+                #print(f"Getting details for first video: {first_video['title'][:30]}...")
                 details = get_video_details(first_video["id"])
                 if "likes" in details:
                     first_video["likes"] = details["likes"]
@@ -727,7 +728,7 @@ def get_playlist_videos(playlist_id_or_url, limit=0, max_details=15):
             
         return result
     except Exception as e:
-        print(f"Web fallback error: {e}")
+        #print(f"Web fallback error: {e}")
         return {
             "id": playlist_id,
             "title": "Could not retrieve playlist info",
@@ -838,7 +839,7 @@ def get_direct_playlist_views(playlist_url, debug=False):
                 print("No direct view count found in playlist page")
             return None
     except Exception as e:
-        print(f"Error fetching direct playlist views: {e}")
+        #print(f"Error fetching direct playlist views: {e}")
         return None
 
 def search_youtube_web(query, limit=10, content_type=None, min_duration=None, max_duration=None):
@@ -922,7 +923,7 @@ def search_youtube_web(query, limit=10, content_type=None, min_duration=None, ma
             "source": "web_fallback"
         }
     except Exception as e:
-        print(f"Web fallback error: {e}")
+        #print(f"Web fallback error: {e}")
         return {
             "query": query,
             "results": [],
@@ -941,7 +942,7 @@ def search_playlists(query, limit=10):
         list: Playlist search results
     """
     try:
-        print(f"Searching for playlists with query: {query}")
+        #print(f"Searching for playlists with query: {query}")
         
         # Create search URL with playlist filter
         encoded_query = urllib.parse.quote_plus(query)
@@ -1054,7 +1055,7 @@ def search_playlists(query, limit=10):
         }
     
     except Exception as e:
-        print(f"Error searching playlists: {e}")
+        #print(f"Error searching playlists: {e}")
         return {
             "query": query,
             "results": [],
@@ -1084,11 +1085,11 @@ def check_batch_title_relevance(titles, query):
             if parts:
                 # Join remaining words as the technology name
                 technology = " ".join(parts)
-                print(f"Extracted technology from query '{query}': '{technology}'")
+                #print(f"Extracted technology from query '{query}': '{technology}'")
         
         # If we couldn't extract a technology, use the full query
         if not technology:
-            print(f"Using full query for relevance checking: '{query}'")
+            #print(f"Using full query for relevance checking: '{query}'")
             technology = query
         
         # Preprocess titles to handle repetition and excessive length
@@ -1114,9 +1115,9 @@ def check_batch_title_relevance(titles, query):
         # Log title processing results
         for i, (original, processed) in enumerate(zip(titles, processed_titles)):
             if original != processed and len(original) > 50:
-                print(f"Title {i+1} preprocessed: {len(original)} chars -> {len(processed)} chars")
+                #print(f"Title {i+1} preprocessed: {len(original)} chars -> {len(processed)} chars")
                 if len(original) > 100:
-                    print(f"Original (truncated): {original[:40]}...{original[-40:]}")
+                    #print(f"Original (truncated): {original[:40]}...{original[-40:]}")
                     print(f"Processed: {processed}")
         
         # Use our relevance checker module for batch processing
@@ -1135,8 +1136,8 @@ def check_batch_title_relevance(titles, query):
         
         return result
     except Exception as e:
-        print(f"Error checking batch title relevance: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
+        #print(f"Error checking batch title relevance: {e}")
+        #print(f"Traceback: {traceback.format_exc()}")
         return None
 
 def find_best_playlist(query, debug=False, detailed_fetch=False):
@@ -1151,22 +1152,22 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
     Returns:
         dict: Best playlist with score and details
     """
-    print(f"Finding best playlist for: {query}")
+    #print(f"Finding best playlist for: {query}")
     
     # Search for playlists
     playlists_response = search_playlists(query, limit=6)
     
     if not playlists_response or 'results' not in playlists_response:
-        print("No playlists found")
+        #print("No playlists found")
         return None
         
     playlists = playlists_response['results']
         
     if not playlists:
-        print("No playlists found")
+        #print("No playlists found")
         return None
             
-    print(f"Found {len(playlists)} playlists")
+    #print(f"Found {len(playlists)} playlists")
     
     # Create a list of playlist summaries for parallel processing
     playlist_summaries = []
@@ -1197,7 +1198,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
     
     # Check if we have any valid playlists
     if not playlist_summaries:
-        print("No valid playlists found")
+        #print("No valid playlists found")
         return None
         
     # Use batch processing to check title relevance for all playlists at once
@@ -1233,13 +1234,13 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
             print("Batch relevance check failed, proceeding without relevance filtering")
     except Exception as e:
         print(f"Error in batch relevance checking: {e}")
-        print("Proceeding without relevance filtering")
+        # print("Proceeding without relevance filtering")
     
     # Function to evaluate a playlist in parallel
     def evaluate_playlist(playlist_summary, idx):
         try:
             # Always print basic info regardless of debug flag
-            print(f"\n📑 Evaluating playlist {idx+1}: {playlist_summary['title']}")
+            #print(f"\n📑 Evaluating playlist {idx+1}: {playlist_summary['title']}")
         
             playlist_id = playlist_summary['id']
         
@@ -1247,12 +1248,12 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
             # Determine how many videos to fetch detailed info for
             max_details_count = 5 if detailed_fetch else 1
             
-            print(f"Fetching playlist data for ID: {playlist_id}")
+            #print(f"Fetching playlist data for ID: {playlist_id}")
             
             # Fetch playlist data
             playlist = get_playlist_videos(playlist_id, limit=0, max_details=max_details_count)
             
-            print(f"Playlist data fetched. Has videos: {bool(playlist.get('videos'))}")
+            #print(f"Playlist data fetched. Has videos: {bool(playlist.get('videos'))}")
             
             # Handle playlist title repetition
             if "title" in playlist and '\n' in playlist["title"]:
@@ -1273,28 +1274,28 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                 technologies = relevance_check.get('technologies', [])
                 
                 # Enhanced logging for relevance check
-                print(f"Batch relevance check: {is_relevant}")
-                print(f"  Explanation: {explanation}")
+                #print(f"Batch relevance check: {is_relevant}")
+                #print(f"  Explanation: {explanation}")
 
                 if technologies:
-                    print(f"  Technologies detected: {', '.join(technologies)}")
+                    #print(f"  Technologies detected: {', '.join(technologies)}")
                     print(f"  IMPORTANT - Is this playlist relevant to '{query}'? {'YES' if is_relevant else 'NO'}")
                 
                 # Skip non-relevant playlists entirely
                 if not is_relevant:
-                    print(f"⚠️ Warning: Relevance check determined this playlist is not relevant")
-                    print(f"   Reason: {explanation}")
-                    print(f"   Skipping this playlist")
+                    #print(f"⚠️ Warning: Relevance check determined this playlist is not relevant")
+                    #print(f"   Reason: {explanation}")
+                    #print(f"   Skipping this playlist")
                     return None
             else:
                 print("No relevance check information available")
             
-            print("Applying scoring criteria...")
+            #print("Applying scoring criteria...")
             
             # Apply scoring criteria - pass the pre-computed relevance_check
             score, details = score_playlist(playlist, query, debug, relevance_check)
             
-            print(f"Score result: {score}")
+            #print(f"Score result: {score}")
                 
             if score is not None:
                 # Extract technologies from the relevance check if available
@@ -1312,18 +1313,18 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                     "technologies": technologies
                 }
                     
-                print(f"✅ Final Score: {score:.1f}/10.0")
+                #print(f"✅ Final Score: {score:.1f}/10.0")
 
                 if technologies:
                     print(f"✅ Technologies detected: {', '.join(technologies)}")   
                 return result
             
             else:
-                print("❌ Score is None - playlist failed scoring criteria")
+                #print("❌ Score is None - playlist failed scoring criteria")
                 return None
             
         except Exception as e:
-            print(f"Error evaluating playlist {playlist_id}: {e}")
+            #print(f"Error evaluating playlist {playlist_id}: {e}")
             traceback.print_exc()
             return None
     
@@ -1351,7 +1352,7 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
                         # If we already have an exceptional playlist, keep the one with higher score
                         if exceptional_playlist is None or result["score"] > exceptional_playlist["score"]:
                             exceptional_playlist = result
-                            print(f"\n🌟 Found exceptional playlist: {result['playlist']['title']} (Score: {result['score']:.1f}/10.0)")
+                            #print(f"\n🌟 Found exceptional playlist: {result['playlist']['title']} (Score: {result['score']:.1f}/10.0)")
                             # Cancel remaining tasks if we have an exceptional playlist
                             for f in list(future_to_playlist.keys()):
                                 if not f.done() and not f.running():
@@ -1364,9 +1365,9 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
     if exceptional_playlist:
         if debug:
             print(f"\n🏆 BEST PLAYLIST (Exceptional): {exceptional_playlist['playlist']['title']}")
-            print(f"Score: {exceptional_playlist['score']:.1f}/10.0")
-            print(f"Verdict: {exceptional_playlist['verdict']}")
-            print(f"URL: {exceptional_playlist['playlist']['url']}")
+            #print(f"Score: {exceptional_playlist['score']:.1f}/10.0")
+            #print(f"Verdict: {exceptional_playlist['verdict']}")
+            #print(f"URL: {exceptional_playlist['playlist']['url']}")
         return exceptional_playlist
     
     # Sort playlists by score and return the best one if no exceptional playlist was found
@@ -1377,9 +1378,9 @@ def find_best_playlist(query, debug=False, detailed_fetch=False):
         
         if debug:
             print(f"\n🏆 BEST PLAYLIST: {best['playlist']['title']}")
-            print(f"Score: {best['score']:.1f}/10.0")
-            print(f"Verdict: {best['verdict']}")
-            print(f"URL: {best['playlist']['url']}")
+            #print(f"Score: {best['score']:.1f}/10.0")
+            #print(f"Verdict: {best['verdict']}")
+            #print(f"URL: {best['playlist']['url']}")
             
             # Print top 3 if available
             if len(scored_playlists) > 1:
@@ -1410,7 +1411,7 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
     title = playlist.get("title", "")
     videos = playlist.get("videos", [])
     
-    print(f"Scoring playlist: '{title}' ({len(videos)} videos)")
+    #print(f"Scoring playlist: '{title}' ({len(videos)} videos)")
     
     # Initialize main_tech_term at the beginning
     main_tech_term = None
@@ -1447,7 +1448,7 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
     # Check for enhanced total duration
     if '_total_duration_minutes' in playlist:
         details["total_duration_minutes"] = playlist.get('_total_duration_minutes')
-        print(f"Using enhanced total duration: {details['total_duration_minutes']:.1f} minutes")
+        #print(f"Using enhanced total duration: {details['total_duration_minutes']:.1f} minutes")
     
     # 🧠 Must-Pass Filter: Title Relevance
     title_relevance = False
@@ -1455,18 +1456,18 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
     
     # Use the pre-computed relevance check if provided
     if relevance_check:
-        print(f"Using pre-computed relevance check result")
+        #print(f"Using pre-computed relevance check result")
         
         title_relevance = relevance_check.get('is_relevant', False)
         relevance_explanation = relevance_check.get('explanation', 'No explanation provided')
         
-        print(f"Pre-computed relevance check: {title_relevance}")
-        print(f"  Explanation: {relevance_explanation}")
+        #print(f"Pre-computed relevance check: {title_relevance}")
+        #print(f"  Explanation: {relevance_explanation}")
     else:
-        print("No pre-computed relevance check provided, doing a new check")
+        #print("No pre-computed relevance check provided, doing a new check")
         
         # Check title relevance using batch processing
-        print(f"Checking title relevance: '{title}'")
+        #print(f"Checking title relevance: '{title}'")
         
         # Use batch relevance checker (this is the redundant call we want to avoid)
         batch_result = check_batch_title_relevance([title], query)
@@ -1476,11 +1477,11 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
             title_relevance = first_result['isRelevant']
             relevance_explanation = first_result['explanation']
             
-            print(f"Batch relevance check: {title_relevance}")
-            print(f"  Explanation: {relevance_explanation}")
+            #print(f"Batch relevance check: {title_relevance}")
+            #print(f"  Explanation: {relevance_explanation}")
         else:
             # Fall back to basic matching if batch processing fails
-            print(f"Batch relevance check failed. Falling back to basic relevance matching.")
+            #print(f"Batch relevance check failed. Falling back to basic relevance matching.")
         
             # Basic matching approach
             query_terms = query.lower().split()
@@ -1521,14 +1522,14 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
     details["title_relevance"] = title_relevance
     
     if not title_relevance:
-        print(f"❌ Failed title relevance check: {relevance_explanation}")
+        #print(f"❌ Failed title relevance check: {relevance_explanation}")
         return None, None
     else:
         print(f"✓ Passed title relevance check: {relevance_explanation}")
     
     # Ensure we have at least one video
     if len(videos) < 1:
-        print(f"❌ No videos found in playlist")
+        #print(f"❌ No videos found in playlist")
         return None, None
     
     # 🧮 Start scoring the playlist - NEW SCORING SYSTEM (Total: 10 points)
@@ -1832,7 +1833,7 @@ def score_playlist(playlist, query, debug=False, relevance_check=None):
     
     # Final score (out of 10.0)
     if debug:
-        print(f"= TOTAL SCORE: {total_score:.1f}/10.0")
+        #print(f"= TOTAL SCORE: {total_score:.1f}/10.0")
         print(f"= VERDICT: {get_verdict(total_score)}")
     
     return total_score, details
@@ -1853,9 +1854,9 @@ def get_verdict(score):
 
 def print_video_details(video):
     """Print formatted video details"""
-    print("\n" + "=" * 50)
-    print(f"Title: {video.get('title', 'Unknown')}")
-    print(f"Channel: {video.get('channel', {}).get('name', 'Unknown')}")
+    #print("\n" + "=" * 50)
+    #print(f"Title: {video.get('title', 'Unknown')}")
+    #print(f"Channel: {video.get('channel', {}).get('name', 'Unknown')}")
     
     if "likes" in video and video["likes"] is not None:
         print(f"👍 LIKES: {video.get('likes_formatted', format_number(video['likes']))}")
@@ -1869,36 +1870,36 @@ def print_video_details(video):
     if "duration_string" in video:
         print(f"Duration: {video.get('duration_string', 'Unknown')}")
     
-    print(f"URL: {video.get('url', '')}")
+    #print(f"URL: {video.get('url', '')}")
     
     if "description" in video and video["description"]:
-        print("\nDescription:")
+        #print("\nDescription:")
         desc = video.get('description', '')
-        print(f"{desc[:300]}..." if len(desc) > 300 else desc)
+        #print(f"{desc[:300]}..." if len(desc) > 300 else desc)
     
-    print("=" * 50)
+    #print("=" * 50)
 
 def print_search_results(search_results):
     """Print formatted search results"""
     results = search_results.get("results", [])
     
     if not results:
-        print("No results found.")
+        #print("No results found.")
         return
     
-    print(f"\nFound {len(results)} results for '{search_results.get('query', '')}':")
+    #print(f"\nFound {len(results)} results for '{search_results.get('query', '')}':")
     
     for i, item in enumerate(results, 1):
         item_type = item.get('type', 'video')
         
         if item_type == 'playlist':
-            print(f"\n{i}. 📑 PLAYLIST: {item['title']}")
-            print(f"   Channel: {item['channel']['name']}")
-            print(f"   Videos: {item.get('video_count', 'Unknown')}")
+            #print(f"\n{i}. 📑 PLAYLIST: {item['title']}")
+            #print(f"   Channel: {item['channel']['name']}")
+            #print(f"   Videos: {item.get('video_count', 'Unknown')}")
             print(f"   URL: {item['url']}")
         else:
-            print(f"\n{i}. 🎬 {item['title']}")
-            print(f"   Channel: {item['channel']['name']}")
+            #print(f"\n{i}. 🎬 {item['title']}")
+            #print(f"   Channel: {item['channel']['name']}")
             
             if "likes" in item and item["likes"] is not None:
                 print(f"   👍 Likes: {item.get('likes_formatted', 'Unknown')}")
@@ -1909,22 +1910,22 @@ def print_search_results(search_results):
             if "duration" in item:
                 print(f"   Duration: {item.get('duration', 'Unknown')}")
             
-            print(f"   URL: {item['url']}")
+            #print(f"   URL: {item['url']}")
 
 def print_playlist_videos(playlist):
     """Print formatted playlist videos"""
     videos = playlist.get("videos", [])
     
     if not videos:
-        print("No videos found in playlist.")
+        #print("No videos found in playlist.")
         return
     
-    print(f"\nPlaylist: {playlist.get('title', 'Unknown')}")
-    print(f"Video count: {playlist.get('video_count', len(videos))}")
+    #print(f"\nPlaylist: {playlist.get('title', 'Unknown')}")
+    #print(f"Video count: {playlist.get('video_count', len(videos))}")
     
     for i, video in enumerate(videos, 1):
-        print(f"\n{i}. {video['title']}")
-        print(f"   Channel: {video['channel']['name']}")
+        #print(f"\n{i}. {video['title']}")
+        #print(f"   Channel: {video['channel']['name']}")
         
         if "likes" in video and video["likes"] is not None:
             print(f"   👍 Likes: {video.get('likes_formatted', 'Unknown')}")
@@ -1938,36 +1939,36 @@ def print_playlist_videos(playlist):
         if "publish_date" in video:
             print(f"   Published: {video.get('publish_date', 'Unknown')}")
         
-        print(f"   URL: {video['url']}")
+        #print(f"   URL: {video['url']}")
 
 # ===== USAGE EXAMPLE =====
 
 if __name__ == "__main__":
-    print("\n===== YouTube API =====")
-    print("1. Get video details")
-    print("2. Get playlist videos")
-    print("3. Search YouTube with filters")
-    print("4. Search Playlists Only")
-    print("5. Find Best Playlist for Topic")
+    #print("\n===== YouTube API =====")
+    #print("1. Get video details")
+    #print("2. Get playlist videos")
+    #print("3. Search YouTube with filters")
+    #print("4. Search Playlists Only")
+    #print("5. Find Best Playlist for Topic")
     
     choice = input("\nEnter your choice (1-5): ")
     
     if choice == '1':
         video_url = input("Enter YouTube video URL or ID: ")
         video = get_video_details(video_url)
-        print_video_details(video)
+        #print_video_details(video)
     
     elif choice == '2':
         playlist_url = input("Enter YouTube playlist URL or ID: ")
         limit = int(input("How many videos to fetch (default: all): ") or "0")
         max_details = int(input("How many videos to fetch detailed info for (default: 15): ") or "15")
         
-        print(f"\nFetching playlist information...")
+        #print(f"\nFetching playlist information...")
         if limit > 0:
             print(f"Will fetch up to {limit} videos.")
         else:
             print("Will fetch all videos in the playlist.")
-        print(f"Will get detailed information (likes/views) for up to {max_details} videos.")
+        #print(f"Will get detailed information (likes/views) for up to {max_details} videos.")
         
         playlist = get_playlist_videos(playlist_url, limit, max_details)
         print_playlist_videos(playlist)
@@ -1976,21 +1977,21 @@ if __name__ == "__main__":
         query = input("Enter search query: ")
         limit = int(input("How many results (default: 5): ") or "5")
         
-        print("\nSelect content type:")
-        print("1. All content")
-        print("2. Videos only")
+        #print("\nSelect content type:")
+        #print("1. All content")
+        #print("2. Videos only")
         content_type_choice = input("Enter choice (1-2, default: 1): ") or "1"
         
         content_type = None
         if content_type_choice == "2":
             content_type = "video"
         
-        print("\nSelect duration filter:")
-        print("1. Any duration")
-        print("2. Short (< 4 minutes)")
-        print("3. Medium (4-20 minutes)")
-        print("4. Long (> 20 minutes)")
-        print("5. Custom duration range")
+        #print("\nSelect duration filter:")
+        #print("1. Any duration")
+        #print("2. Short (< 4 minutes)")
+        #print("3. Medium (4-20 minutes)")
+        #print("4. Long (> 20 minutes)")
+        #print("5. Custom duration range")
         duration_choice = input("Enter choice (1-5, default: 1): ") or "1"
         
         min_duration = None
@@ -2016,51 +2017,51 @@ if __name__ == "__main__":
             else:
                 max_duration = None
         
-        print("\nSearching with filters...")
+        #print("\nSearching with filters...")
         search_results = search_youtube(query, limit, content_type, min_duration, max_duration)
-        print_search_results(search_results)
+        #print_search_results(search_results)
     
     elif choice == '4':
         query = input("Enter search query: ")
         limit = int(input("How many results (default: 5): ") or "5")
         
-        print("\nSearching for playlists...")
+        #print("\nSearching for playlists...")
         search_results = search_playlists(query, limit)
-        print_search_results(search_results)
+        #print_search_results(search_results)
         
     elif choice == '5':
         query = input("Enter topic to find best playlist for: ")
-        print("\nSearching for best playlist...")
-        print("(This may take some time as we analyze multiple playlists)")
+        #print("\nSearching for best playlist...")
+        #print("(This may take some time as we analyze multiple playlists)")
         
         best_playlist = find_best_playlist(query, debug=True)
         
         if best_playlist:
-            print("\n🏆 BEST PLAYLIST FOUND:")
-            print_playlist_videos(best_playlist["playlist"])
+            #print("\n🏆 BEST PLAYLIST FOUND:")
+            #print_playlist_videos(best_playlist["playlist"])
             
             # Display additional analytics
             total_views = best_playlist["details"].get("total_views", 0)
             total_likes = best_playlist["details"].get("total_likes", 0)
             videos = best_playlist["playlist"].get("videos", [])
             
-            print(f"\n📊 PLAYLIST ANALYTICS:")
-            print(f"Total Videos: {len(videos)}")
-            print(f"Total Views: {format_number(total_views)}")
-            print(f"Total Duration: {int(best_playlist['details'].get('total_duration_minutes', 0))} minutes")
-            print(f"Average Duration Per Video: {int(best_playlist['details'].get('total_duration_minutes', 0) / len(videos) if len(videos) > 0 else 0)} minutes")
+            #print(f"\n📊 PLAYLIST ANALYTICS:")
+            #print(f"Total Videos: {len(videos)}")
+            #print(f"Total Views: {format_number(total_views)}")
+            #print(f"Total Duration: {int(best_playlist['details'].get('total_duration_minutes', 0))} minutes")
+            #print(f"Average Duration Per Video: {int(best_playlist['details'].get('total_duration_minutes', 0) / len(videos) if len(videos) > 0 else 0)} minutes")
             
             # Display scoring breakdown
-            print(f"\n📝 SCORING BREAKDOWN (out of 10):")
-            print(f"🔢 Video Count: +{best_playlist['details']['video_count_score']:.1f}")
-            print(f"👀 Total Views: +{best_playlist['details']['total_views_score']:.1f}")
-            print(f"⏱ Duration/Video: +{best_playlist['details']['duration_ratio_score']:.1f}")
-            print(f"📅 First Video Recency: +{best_playlist['details']['recency_score']:.1f}")
-            print(f"❤️ First Video Like Ratio: +{best_playlist['details']['like_ratio_score']:.2f}")
+            #print(f"\n📝 SCORING BREAKDOWN (out of 10):")
+            #print(f"🔢 Video Count: +{best_playlist['details']['video_count_score']:.1f}")
+            #print(f"👀 Total Views: +{best_playlist['details']['total_views_score']:.1f}")
+            #print(f"⏱ Duration/Video: +{best_playlist['details']['duration_ratio_score']:.1f}")
+            #print(f"📅 First Video Recency: +{best_playlist['details']['recency_score']:.1f}")
+            #print(f"❤️ First Video Like Ratio: +{best_playlist['details']['like_ratio_score']:.2f}")
             # Quality evaluation section removed
-            print(f"📈 First Video Popularity: +{best_playlist['details']['first_video_views_score']:.1f}")
+            #print(f"📈 First Video Popularity: +{best_playlist['details']['first_video_views_score']:.1f}")
             
-            print(f"\nFinal Score: {best_playlist['score']:.1f}/10.0")
+            #print(f"\nFinal Score: {best_playlist['score']:.1f}/10.0")
             print(f"Verdict: {best_playlist['verdict']}")
         else:
             print("\n❌ No suitable playlists found that meet the minimum criteria.")

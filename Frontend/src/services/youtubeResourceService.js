@@ -583,7 +583,7 @@ export const saveRoadmapWithResources = async (updatedRoadmap) => {
     console.log('Formatted roadmap for API:', JSON.stringify(formattedRoadmap, null, 2));
     
     // Create axios instance for direct API call
-    const API_URL = 'http://localhost:5000/api';
+    const API_URL = import.meta.env.VITE_AUTH_API_URL;
     // Always use the regular roadmaps endpoint
     const endpoint = '/roadmaps';
     

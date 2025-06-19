@@ -3,7 +3,7 @@ import { getUserRoadmaps } from './roadmapService';
 import { getUserCustomRoadmaps } from './customRoadmapService';
 
 // Force the correct port regardless of environment variable
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_AUTH_API_URL;
 
 // Create axios instance with credentials
 const api = axios.create({

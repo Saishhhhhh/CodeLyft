@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Force the correct port regardless of environment variable
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_AUTH_API_URL;
 
 // Create axios instance with credentials
 const api = axios.create({
@@ -11,6 +11,18 @@ const api = axios.create({
     'Content-Type': 'application/json'
   }
 });
+
+// Add authorization header to requests if token exists
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // Track the last save operation to prevent duplicates
 let lastSaveTimestamp = 0;
@@ -166,24 +178,10 @@ export const saveGeneratedRoadmap = async (roadmapData) => {
       
       console.log('Formatted roadmap for API:', formattedRoadmap);
       
-      // Get token from localStorage if available
-      const token = localStorage.getItem('token');
-      
-      // Create a properly configured axios instance for this request
-      const apiRequest = axios.create({
-        baseURL: API_URL,
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-          // Include Authorization header only if token exists
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
-      
       // Determine which endpoint to use based on isCustom flag
       const endpoint = formattedRoadmap.isCustom ? '/custom-roadmaps' : '/roadmaps';
       console.log(`Making API call to: ${API_URL}${endpoint} (isCustom: ${formattedRoadmap.isCustom})`);
-      const response = await apiRequest.post(endpoint, formattedRoadmap);
+      const response = await api.post(endpoint, formattedRoadmap);
       console.log('API response:', response);
       
       // Save the ID for future reference
@@ -256,24 +254,10 @@ export const saveGeneratedRoadmap = async (roadmapData) => {
       
       console.log('Formatted roadmap for API:', formattedRoadmap);
       
-      // Get token from localStorage if available
-      const token = localStorage.getItem('token');
-      
-      // Create a properly configured axios instance for this request
-      const apiRequest = axios.create({
-        baseURL: API_URL,
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-          // Include Authorization header only if token exists
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
-      
       // Determine which endpoint to use based on isCustom flag
       const endpoint = formattedRoadmap.isCustom ? '/custom-roadmaps' : '/roadmaps';
       console.log(`Making API call to: ${API_URL}${endpoint} (isCustom: ${formattedRoadmap.isCustom})`);
-      const response = await apiRequest.post(endpoint, formattedRoadmap);
+      const response = await api.post(endpoint, formattedRoadmap);
       console.log('API response:', response);
       
       // Save the ID for future reference
@@ -718,21 +702,7 @@ export const saveVideoNotes = async (roadmapId, videoId, notes) => {
   try {
     console.log('Saving notes for video', videoId, 'in roadmap', roadmapId);
     
-    // Get token from localStorage if available
-    const token = localStorage.getItem('token');
-    
-    // Create a properly configured axios instance for this request
-    const apiRequest = axios.create({
-      baseURL: API_URL,
-      withCredentials: true,
-      headers: {
-        'Content-Type': 'application/json',
-        // Include Authorization header only if token exists
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      }
-    });
-    
-    const response = await apiRequest.post(`/roadmaps/${roadmapId}/notes`, {
+    const response = await api.post(`/roadmaps/${roadmapId}/notes`, {
       videoId,
       notes,
       timestamp: new Date().toISOString()
@@ -755,22 +725,8 @@ export const getVideoNotes = async (roadmapId) => {
   try {
     console.log('Getting notes for roadmap', roadmapId);
     
-    // Get token from localStorage if available
-    const token = localStorage.getItem('token');
-    
-    // Create a properly configured axios instance for this request
-    const apiRequest = axios.create({
-      baseURL: API_URL,
-      withCredentials: true,
-      headers: {
-        'Content-Type': 'application/json',
-        // Include Authorization header only if token exists
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      }
-    });
-    
     try {
-      const response = await apiRequest.get(`/roadmaps/${roadmapId}/notes`);
+      const response = await api.get(`/roadmaps/${roadmapId}/notes`);
       return response.data;
     } catch (apiError) {
       // If the server returns 404, it means the notes endpoint isn't available yet
