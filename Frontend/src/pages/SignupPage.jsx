@@ -341,8 +341,8 @@ const SignupPage = () => {
           <OAuthButton 
             provider="GitHub" 
             icon={<FaGithub />}
-            onClick={handleGithubLogin}
-            disabled={isSubmitting}
+            onClick={() => {}}
+            disabled={true}
           />
         </div>
         

@@ -193,8 +193,8 @@ const LoginPage = () => {
         <OAuthButton 
           provider="GitHub" 
           icon={<FaGithub />}
-          onClick={() => handleOAuthLogin('GitHub')}
-          disabled={loading}
+          onClick={() => {}}
+          disabled={true}
         />
       </div>
       

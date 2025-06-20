@@ -287,7 +287,7 @@ def get_similarity(tech1: str, tech2: str) -> float:
     # Get canonical names
     canonical1 = get_canonical_name(tech1)
     canonical2 = get_canonical_name(tech2)
-    
+        
     # If both have canonical names, compare them
     if canonical1 and canonical2:
         if canonical1 == canonical2:

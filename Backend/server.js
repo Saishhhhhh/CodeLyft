@@ -41,7 +41,7 @@ connectDB().catch(err => {
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? [process.env.FRONTEND_URL, 'https://codelyft.vercel.app']
-    : ['http://localhost:5173', 'http://localhost:3000'],
+  : ['http://localhost:5173', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true // Allow cookies to be sent with requests
@@ -56,26 +56,26 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Configure session with error handling
 try {
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || 'your-session-secret-key',
-      resave: false,
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'your-session-secret-key',
+    resave: false,
       saveUninitialized: true,
-      store: MongoStore.create({
-        mongoUrl: process.env.MONGO_URI || 'mongodb://localhost:27017/muftcode',
-        collectionName: 'sessions',
-        ttl: 24 * 60 * 60, // 1 day in seconds
-        autoRemove: 'native',
-        touchAfter: 24 * 3600 // time period in seconds
-      }),
-      cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
-        sameSite: 'lax'
-      }
-    })
-  );
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI || 'mongodb://localhost:27017/muftcode',
+      collectionName: 'sessions',
+      ttl: 24 * 60 * 60, // 1 day in seconds
+      autoRemove: 'native',
+      touchAfter: 24 * 3600 // time period in seconds
+    }),
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      sameSite: 'lax'
+    }
+  })
+);
   console.log('Session middleware configured successfully');
 } catch (error) {
   console.error('Error configuring session:', error);
