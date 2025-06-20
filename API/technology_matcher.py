@@ -1,18 +1,19 @@
 """
-Technology Matcher API - Lightweight string matching for technology names
-Uses fuzzy string matching and tech_aliases.json for technology matching
+Technology Matcher API - Efficient and accurate technology name matching
+Uses multiple matching strategies with proper validation and edge case handling
 """
 
 import os
 import json
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import logging
 import time
 import re
 from pydantic import BaseModel
 from difflib import SequenceMatcher
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(
@@ -24,21 +25,23 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="Technology Matcher API",
-    description="API for matching technology names using lightweight string matching",
-    version="1.0.0"
+    description="API for matching technology names using efficient multi-strategy matching",
+    version="2.0.0"
 )
 
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # Global variables
-SIMILARITY_THRESHOLD = 0.85  # Threshold for considering technologies equivalent
+SIMILARITY_THRESHOLD = 0.85
+MIN_LENGTH_FOR_FUZZY = 3  # Minimum length for fuzzy matching
+MAX_LENGTH_RATIO = 0.5    # Maximum length ratio for fuzzy matching
 
 # Load technology aliases from JSON
 try:
@@ -51,25 +54,174 @@ except Exception as e:
     logger.error(f"Error loading technology aliases: {e}")
     TECH_ALIASES_DATA = {"technologies": []}
 
-# Create lookup dictionaries for faster access
-CANONICAL_TO_ALIASES = {}  # Maps canonical name to list of aliases
-ALIAS_TO_CANONICAL = {}    # Maps any alias to its canonical name
-
-# Build the lookup dictionaries
-for tech in TECH_ALIASES_DATA.get("technologies", []):
-    canonical = tech.get("canonical", "").lower()
-    if canonical:
-        aliases = [alias.lower() for alias in tech.get("aliases", [])]
-        CANONICAL_TO_ALIASES[canonical] = aliases
+class TechnologyMatcher:
+    """Efficient technology matcher with multiple strategies"""
+    
+    def __init__(self):
+        self.canonical_to_aliases = {}
+        self.alias_to_canonical = {}
+        self.canonical_set = set()
+        self.alias_set = set()
+        self._build_indexes()
         
-        # Map canonical to itself
-        ALIAS_TO_CANONICAL[canonical] = canonical
+    def _build_indexes(self):
+        """Build efficient lookup indexes"""
+        for tech in TECH_ALIASES_DATA.get("technologies", []):
+            canonical = tech.get("canonical", "").lower().strip()
+            if not canonical:
+                continue
+            aliases = [alias.lower().strip() for alias in tech.get("aliases", [])]
+            # Store canonical and its aliases
+            self.canonical_to_aliases[canonical] = aliases
+            self.canonical_set.add(canonical)
+            # Map canonical to itself
+            self.alias_to_canonical[canonical] = canonical
+            self.alias_set.add(canonical)
+            # Map each alias to canonical
+            for alias in aliases:
+                if alias:  # Skip empty aliases
+                    self.alias_to_canonical[alias] = canonical
+                    self.alias_set.add(alias)
+        logger.info(f"Built indexes: {len(self.canonical_set)} canonicals, {len(self.alias_set)} total aliases")
+    
+    def normalize_tech_name(self, tech_name: str) -> str:
+        """Normalize technology name for consistent matching"""
+        if not tech_name:
+            return ""
+        # Convert to lowercase and strip
+        normalized = tech_name.lower().strip()
+        # Remove extra whitespace
+        normalized = re.sub(r'\s+', ' ', normalized)
+        # Remove common punctuation that doesn't affect meaning
+        normalized = re.sub(r'[^\w\s-]', '', normalized)
+        return normalized
+    
+    def is_exact_match(self, tech1: str, tech2: str) -> bool:
+        """Check for exact match after normalization"""
+        norm1 = self.normalize_tech_name(tech1)
+        norm2 = self.normalize_tech_name(tech2)
+        return norm1 == norm2 and norm1 != ""
+    
+    def is_alias_match(self, tech1: str, tech2: str) -> bool:
+        """Check if technologies match via aliases"""
+        norm1 = self.normalize_tech_name(tech1)
+        norm2 = self.normalize_tech_name(tech2)
         
-        # Map each alias to the canonical name
-        for alias in aliases:
-            ALIAS_TO_CANONICAL[alias] = canonical
+        # Direct match
+        if norm1 == norm2:
+            return True
+        
+        # Check if both are in our alias system
+        canonical1 = self.alias_to_canonical.get(norm1)
+        canonical2 = self.alias_to_canonical.get(norm2)
+        
+        # If both have canonical names and they're the same
+        if canonical1 and canonical2 and canonical1 == canonical2:
+            return True
+        
+        return False
+    
+    def get_canonical_name(self, tech_name: str) -> Optional[str]:
+        """Get canonical name with strict validation"""
+        norm_tech = self.normalize_tech_name(tech_name)
+        
+        # Direct lookup
+        if norm_tech in self.alias_to_canonical:
+            return self.alias_to_canonical[norm_tech]
+        
+        # Only do fuzzy matching for longer strings
+        if len(norm_tech) < MIN_LENGTH_FOR_FUZZY:
+            return None
+        
+        # Fuzzy matching with strict criteria
+        best_match = None
+        best_score = 0
+        
+        for alias in self.alias_set:
+            # Skip if length ratio is too different
+            length_ratio = min(len(norm_tech), len(alias)) / max(len(norm_tech), len(alias))
+            if length_ratio < MAX_LENGTH_RATIO:
+                continue
+            
+            # Calculate similarity
+            score = SequenceMatcher(None, norm_tech, alias).ratio()
+            
+            # Very strict threshold for fuzzy matching
+            if score > best_score and score > 0.95:
+                best_score = score
+                best_match = self.alias_to_canonical[alias]
+        
+        return best_match
+    
+    def calculate_similarity(self, tech1: str, tech2: str) -> Tuple[float, str]:
+        """Calculate similarity with detailed explanation"""
+        norm1 = self.normalize_tech_name(tech1)
+        norm2 = self.normalize_tech_name(tech2)
+        
+        # Exact match
+        if norm1 == norm2:
+            return 1.0, "exact_match"
+        
+        # Alias match
+        if self.is_alias_match(tech1, tech2):
+            return 1.0, "alias_match"
+        
+        # Get canonical names
+        canonical1 = self.get_canonical_name(tech1)
+        canonical2 = self.get_canonical_name(tech2)
+        
+        # Both have canonical names
+        if canonical1 and canonical2:
+            if canonical1 == canonical2:
+                return 0.95, "same_canonical"
+            else:
+                # Compare canonical names
+                score = SequenceMatcher(None, canonical1, canonical2).ratio()
+                return score, "canonical_comparison"
+        
+        # Only one has canonical name
+        if canonical1:
+            score1 = SequenceMatcher(None, norm1, canonical1).ratio()
+            score2 = SequenceMatcher(None, norm2, canonical1).ratio()
+            return max(score1, score2), "canonical_reference"
+        elif canonical2:
+            score1 = SequenceMatcher(None, norm1, canonical2).ratio()
+            score2 = SequenceMatcher(None, norm2, canonical2).ratio()
+            return max(score1, score2), "canonical_reference"
+        
+        # Direct fuzzy matching as last resort
+        score = SequenceMatcher(None, norm1, norm2).ratio()
+        return score, "direct_fuzzy"
+    
+    def validate_match(self, tech1: str, tech2: str, similarity: float, method: str) -> bool:
+        """Additional validation to prevent false positives"""
+        norm1 = self.normalize_tech_name(tech1)
+        norm2 = self.normalize_tech_name(tech2)
+        # Length-based validation
+        if len(norm1) < 2 or len(norm2) < 2:
+            return False
+        # Substring validation - prevent "g" matching "gitlab"
+        if len(norm1) < len(norm2) and norm1 in norm2:
+            if len(norm1) / len(norm2) < 0.5:  # If one is less than half the length
+                return False
+        if len(norm2) < len(norm1) and norm2 in norm1:
+            if len(norm2) / len(norm1) < 0.5:
+                return False
+        # Method-specific validation
+        if method == "direct_fuzzy" and similarity < 0.9:
+            return False
+        return True
 
-logger.info(f"Processed {len(CANONICAL_TO_ALIASES)} technology mappings with {len(ALIAS_TO_CANONICAL)} total aliases")
+    def are_equivalent_by_alias_or_canonical(self, tech1: str, tech2: str) -> bool:
+        norm1 = self.normalize_tech_name(tech1)
+        norm2 = self.normalize_tech_name(tech2)
+        canonical1 = self.alias_to_canonical.get(norm1)
+        canonical2 = self.alias_to_canonical.get(norm2)
+        # If both resolve to the same canonical, or are the same normalized string
+        return (canonical1 is not None and canonical1 == canonical2) or (norm1 == norm2 and norm1 != "")
+
+# Initialize the matcher
+matcher = TechnologyMatcher()
 
 class TechnologyMatchRequest(BaseModel):
     tech1: str
@@ -83,170 +235,46 @@ class TechnologyMatchResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize the technology matcher"""
-    logger.info("Technology matcher initialized with lightweight string matching")
+    logger.info("Technology matcher initialized with efficient multi-strategy matching")
 
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "method": "lightweight_string_matching"}
+    return {"status": "healthy", "method": "efficient_multi_strategy_matching"}
 
-def normalize_tech_name(tech_name: str) -> str:
-    """Normalize technology name for better matching"""
-    if not tech_name:
-        return ""
-        
-    # Convert to lowercase
-    normalized = tech_name.lower()
+def generate_explanation(tech1: str, tech2: str, similarity: float, method: str) -> str:
+    """Generate detailed explanation for the match result"""
+    method_descriptions = {
+        "exact_match": "Exact match after normalization",
+        "alias_match": "Match found via technology alias dictionary",
+        "same_canonical": "Both technologies resolve to the same canonical name",
+        "canonical_comparison": "Comparison of canonical names",
+        "canonical_reference": "Comparison against canonical name reference",
+        "direct_fuzzy": "Direct fuzzy string matching"
+    }
     
-    # Remove extra whitespace
-    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    method_desc = method_descriptions.get(method, method)
     
-    # Remove duplicated words (e.g., "Git Git" -> "Git")
-    words = normalized.split(' ')
-    unique_words = []
-    for word in words:
-        if word not in unique_words:
-            unique_words.append(word)
-    normalized = ' '.join(unique_words)
-    
-    return normalized
-
-def check_alias_match(tech1: str, tech2: str) -> bool:
-    """Check if technologies match via the aliases dictionary"""
-    # Convert to lowercase for case-insensitive comparison
-    tech1_lower = tech1.lower()
-    tech2_lower = tech2.lower()
-    
-    # Direct match check
-    if tech1_lower == tech2_lower:
-        return True
-    
-    # Find the canonical entries that contain these technologies
-    matching_entries = []
-    
-    for tech in TECH_ALIASES_DATA.get("technologies", []):
-        canonical = tech.get("canonical", "").lower()
-        aliases = [alias.lower() for alias in tech.get("aliases", [])]
-        
-        # Check if either tech matches this entry's canonical or aliases
-        tech1_matches = tech1_lower == canonical or tech1_lower in aliases
-        tech2_matches = tech2_lower == canonical or tech2_lower in aliases
-        
-        # If both match the same entry, they're equivalent
-        if tech1_matches and tech2_matches:
-            logger.info(f"Found match: '{tech1}' and '{tech2}' both belong to '{canonical}' group")
-            return True
-    
-    # No match found
-    return False
-
-def get_canonical_name(tech_name: str) -> Optional[str]:
-    """Get the canonical name for a technology if it exists in our aliases"""
-    tech_lower = tech_name.lower()
-    
-    # Direct match
-    if tech_lower in ALIAS_TO_CANONICAL:
-        return ALIAS_TO_CANONICAL[tech_lower]
-    
-    # Fuzzy match with aliases
-    best_match = None
-    best_score = 0
-    
-    for alias, canonical in ALIAS_TO_CANONICAL.items():
-        score = SequenceMatcher(None, tech_lower, alias).ratio()
-        if score > best_score and score > 0.8:  # 80% similarity threshold
-            best_score = score
-            best_match = canonical
-    
-    return best_match
-
-def get_similarity(tech1: str, tech2: str) -> float:
-    """Calculate similarity between two technology names using multiple methods"""
-    # Quick exact match check
-    if tech1.lower() == tech2.lower():
-        return 1.0
-    
-    # Check alias match first
-    if check_alias_match(tech1, tech2):
-        return 1.0
-    
-    # Get canonical names
-    canonical1 = get_canonical_name(tech1)
-    canonical2 = get_canonical_name(tech2)
-        
-    # If both have canonical names, compare them
-    if canonical1 and canonical2:
-        if canonical1 == canonical2:
-            return 0.95  # Very high similarity for same canonical name
-        else:
-            # Compare canonical names with fuzzy matching
-            return SequenceMatcher(None, canonical1, canonical2).ratio()
-    
-    # If only one has canonical name, compare original with canonical
-    if canonical1:
-        return max(
-            SequenceMatcher(None, tech1.lower(), canonical1).ratio(),
-            SequenceMatcher(None, tech2.lower(), canonical1).ratio()
-        )
-    elif canonical2:
-        return max(
-            SequenceMatcher(None, tech1.lower(), canonical2).ratio(),
-            SequenceMatcher(None, tech2.lower(), canonical2).ratio()
-        )
-    
-    # Fallback to direct fuzzy matching
-    return SequenceMatcher(None, tech1.lower(), tech2.lower()).ratio()
-
-def generate_explanation(tech1: str, tech2: str, similarity: float, method: str = "string_matching") -> str:
-    """Generate explanation for the match result"""
-    if method == "alias":
-        return f"Match found via technology alias dictionary between '{tech1}' and '{tech2}'"
-    elif similarity >= SIMILARITY_THRESHOLD:
+    if similarity >= SIMILARITY_THRESHOLD:
         if similarity >= 0.95:
-            return f"Very high {method} similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
+            return f"Very high similarity ({similarity:.2f}) via {method_desc} between '{tech1}' and '{tech2}'"
         else:
-            return f"Sufficient {method} similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
+            return f"Sufficient similarity ({similarity:.2f}) via {method_desc} between '{tech1}' and '{tech2}'"
     else:
-        return f"Insufficient {method} similarity ({similarity:.2f}) between '{tech1}' and '{tech2}'"
+        return f"Insufficient similarity ({similarity:.2f}) via {method_desc} between '{tech1}' and '{tech2}'"
 
 @app.post("/match", tags=["Technology"], response_model=TechnologyMatchResponse)
 async def match_technologies(request: TechnologyMatchRequest):
-    """Check if two technology names are equivalent using multiple methods"""
+    """Check if two technology names are equivalent using strict canonical/alias logic"""
     try:
-        # Step 1: Check for alias match using our dictionary
-        if check_alias_match(request.tech1, request.tech2):
-            return TechnologyMatchResponse(
-                areEquivalent=True,
-                similarity=1.0,
-                explanation=generate_explanation(request.tech1, request.tech2, 1.0, method="alias")
-            )
-        
-        # Step 2: Calculate similarity using string matching
-        try:
-            similarity = get_similarity(request.tech1, request.tech2)
-            
-            # Determine if technologies are equivalent
-            are_equivalent = similarity >= SIMILARITY_THRESHOLD
-            
-            # Generate explanation
-            explanation = generate_explanation(request.tech1, request.tech2, similarity)
-            
-            return TechnologyMatchResponse(
-                areEquivalent=are_equivalent,
-                similarity=similarity,
-                explanation=explanation
-            )
-        except Exception as e:
-            logger.error(f"Error calculating similarity: {e}")
-            # If string matching fails, fall back to simple string comparison
-            are_equivalent = normalize_tech_name(request.tech1) == normalize_tech_name(request.tech2)
-            similarity = 1.0 if are_equivalent else 0.0
-            
-            return TechnologyMatchResponse(
-                areEquivalent=are_equivalent,
-                similarity=similarity,
-                explanation=f"Fallback comparison (string matching failed): {request.tech1} and {request.tech2} are {'equivalent' if are_equivalent else 'different'}"
-            )
+        are_equivalent = matcher.are_equivalent_by_alias_or_canonical(request.tech1, request.tech2)
+        similarity, method = matcher.calculate_similarity(request.tech1, request.tech2)
+        explanation = generate_explanation(request.tech1, request.tech2, similarity, method)
+        return TechnologyMatchResponse(
+            areEquivalent=are_equivalent,
+            similarity=similarity,
+            explanation=explanation
+        )
     except Exception as e:
         logger.error(f"Error matching technologies: {e}")
         raise HTTPException(status_code=500, detail=str(e))
