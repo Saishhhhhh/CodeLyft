@@ -85,15 +85,13 @@ class TechnologyMatcher:
         logger.info(f"Built indexes: {len(self.canonical_set)} canonicals, {len(self.alias_set)} total aliases")
     
     def normalize_tech_name(self, tech_name: str) -> str:
-        """Normalize technology name for consistent matching"""
+        """Normalize technology name for consistent matching, preserving meaningful symbols."""
         if not tech_name:
             return ""
-        # Convert to lowercase and strip
         normalized = tech_name.lower().strip()
-        # Remove extra whitespace
         normalized = re.sub(r'\s+', ' ', normalized)
-        # Remove common punctuation that doesn't affect meaning
-        normalized = re.sub(r'[^\w\s-]', '', normalized)
+        # Remove punctuation except for #, +, and .
+        normalized = re.sub(r'[!$%^&*()=\[\]{};:\'",<>/?|`~]', '', normalized)
         return normalized
     
     def is_exact_match(self, tech1: str, tech2: str) -> bool:

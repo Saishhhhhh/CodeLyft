@@ -1,6 +1,15 @@
 {
     "technologies": [
       {
+        "canonical": "a-frame",
+        "aliases": [  
+          "a-frame.io",
+          "a-frame framework",
+          "a-frame VR"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
         "canonical": "android",
         "aliases": [
           "android os",
@@ -37,6 +46,16 @@
         "ecosystem": "backend"
       },
       {
+        "canonical": "asp.net",
+        "aliases": [
+          "asp.net framework",
+          "asp.net core",
+          "asp.net mvc",
+          "asp.net web api"
+        ],
+        "ecosystem": "backend"
+      },  
+      {
         "canonical": "azure",
         "aliases": [
           "microsoft azure",
@@ -44,6 +63,30 @@
           "azure cloud"
         ],
         "ecosystem": "backend"
+      },
+      {
+        "canonical": "aws",
+        "aliases": [
+          "amazon web services",
+          "aws cloud"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "babel",
+        "aliases": [
+          "babel.js",
+          "babeljs"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "babylon.js",
+        "aliases": [
+          "babylon.js",
+          "babylonjs"
+        ],
+        "ecosystem": "frontend"
       },
       {
         "canonical": "bash",
@@ -78,6 +121,21 @@
           "cpp",
           "cplusplus",
           "c plus plus"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical":"bootstrap",
+        "aliases": [
+          "bootstrap css"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "c#",
+        "aliases": [
+          "c sharp",
+          "c#"
         ],
         "ecosystem": "backend"
       },
@@ -135,6 +193,41 @@
         "ecosystem": "devops"
       },
       {
+        "canonical": "d3.js",
+        "aliases": [
+          "d3.js",
+          "d3js"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "docker",
+        "aliases": [
+          "docker container",
+          "docker image",
+          "docker container manager"
+        ],
+        "ecosystem": "devops"
+      },
+      {
+        "canonical": "django",
+        "aliases": [
+          "django framework",
+          "django library",
+          "django python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "Entity Framework Core",
+        "aliases": [
+          "ef core",
+          "ef",
+          "entity framework"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "emacs",
         "aliases": [
           "gnu emacs",
@@ -142,6 +235,15 @@
           "emacs ide"
         ],
         "ecosystem": "devops"
+      },
+      {
+        "canonical": "expo",
+        "aliases": [
+          "expo framework",
+          "expo.io",
+          "expo.js"
+        ],
+        "ecosystem": "backend"
       },
       {
         "canonical": "express.js",
@@ -187,6 +289,32 @@
           "git repository"
         ],
         "ecosystem": "devops"
+      },
+      {
+        "canonical": "google cloud",
+        "aliases": [
+          "google cloud platform",
+          "google cloud services"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "github actions",
+        "aliases": [
+          "github actions ci",
+          "github actions cd",
+          "github actions pipeline"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "glsl",
+        "aliases": [
+          "glsl shader",
+          "glsl shader language",
+          "glsl shader programming"
+        ],
+        "ecosystem": "frontend"
       },
       {
         "canonical": "go",
@@ -258,6 +386,15 @@
         "ecosystem": "backend"
       },
       {
+        "canonical": "huggingface",
+        "aliases": [
+          "huggingface ai",
+          "huggingface models",
+          "huggingface transformers"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "ionic",
         "aliases": [
           "ionic framework",
@@ -287,8 +424,7 @@
       {
         "canonical": "javascript",
         "aliases": [
-          "ecmascript",
-          "es"
+          "ecmascript"
         ],
         "ecosystem": "frontend"
       },
@@ -336,6 +472,24 @@
         "ecosystem": "backend"
       },
       {
+        "canonical": "kaggle",
+        "aliases": [
+          "kaggle platform",
+          "kaggle dataset",
+          "kaggle competition"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "keras",
+        "aliases": [
+          "keras framework",
+          "keras library",
+          "keras python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "kibana",
         "aliases": [
           "kbn",
@@ -343,6 +497,15 @@
           "kibana dashboard"
         ],
         "ecosystem": "devops"
+      },
+      {
+        "canonical": "kubeflow",
+        "aliases": [
+          "kubeflow framework",
+          "kubeflow library",
+          "kubeflow python"
+        ],
+        "ecosystem": "backend"
       },
       {
         "canonical": "kotlin",
@@ -356,7 +519,11 @@
       {
         "canonical": "kubernetes",
         "aliases": [
-          "kubernetes"
+          "kubernetes",
+          "k8s",
+          "k8",
+          "kubernetes cluster",
+          "kubernetes cluster manager"
         ],
         "ecosystem": "unknown"
       },
@@ -510,6 +677,15 @@
         "ecosystem": "unknown"
       },
       {
+        "canonical":"numpy",
+        "aliases": [
+          "numpy library",
+          "numpy",
+          "numpy python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "nuxtjs",
         "aliases": [
           "nuxt",
@@ -575,7 +751,9 @@
         "aliases": [
           "pd",
           "panel data",
-          "python data analysis"
+          "python data analysis",
+          "pandas library",
+          "pandas python"
         ],
         "ecosystem": "backend"
       },
@@ -625,6 +803,31 @@
         "ecosystem": "backend"
       },
       {
+        "canonical": "pytorch",
+        "aliases": [
+          "pytorch framework",
+          "pytorch library",
+          "pytorch python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "r",
+        "aliases": [
+          "r programming language",
+          "r",
+          "rlang"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "reach",
+        "aliases": [
+          "reach platform"
+        ],
+        "ecosystem": "blockchain"
+      },
+      {
         "canonical": "react",
         "aliases": [
           "reactjs",
@@ -638,7 +841,8 @@
       {
         "canonical": "react native",
         "aliases": [
-          "react native"
+          "react native",
+          "react native framework"
         ],
         "ecosystem": "unknown"
       },
@@ -696,6 +900,17 @@
         "ecosystem": "backend"
       },
       {
+        "canonical": "scikit-learn",
+        "aliases": [
+          "sklearn",
+          "scikit-learn",
+          "scikit-learn framework",
+          "scikit-learn library",
+          "scikit-learn python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "solana",
         "aliases": [
           "sol",
@@ -741,6 +956,15 @@
         "ecosystem": "database"
       },
       {
+        "canonical": "sql server",
+        "aliases": [
+          "sql server",
+          "sql server database",
+          "sql server rdbms"
+        ],
+        "ecosystem": "database"
+      },
+      {
         "canonical": "salesforce",
         "aliases": [
           "sf",
@@ -757,6 +981,23 @@
           "scripting"
         ],
         "ecosystem": "backend"
+      },
+      {
+        "canonical": "seaborn",
+        "aliases": [
+          "seaborn library",
+          "seaborn python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "selenium",
+        "aliases": [
+          "selenium framework",
+          "selenium library",
+          "selenium python"
+        ],
+        "ecosystem": "testing"
       },
       {
         "canonical": "sentry",
@@ -840,6 +1081,15 @@
         "ecosystem": "mobile"
       },
       {
+        "canonical": "tableau",
+        "aliases": [
+          "tableau software",
+          "tableau platform",
+          "tableau analytics"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "test driven development",
         "aliases": [
           "tdd",
@@ -866,6 +1116,15 @@
         "ecosystem": "frontend"
       },
       {
+        "canonical": "tensorflow",
+        "aliases": [
+          "tensorflow framework",
+          "tensorflow library",
+          "tensorflow python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "teamcity",
         "aliases": [
           "jetbrains teamcity",
@@ -878,7 +1137,6 @@
         "canonical": "terraform",
         "aliases": [
           "infrastructure as code",
-          "iac",
           "hashicorp terraform"
         ],
         "ecosystem": "devops"
@@ -893,12 +1151,28 @@
         "ecosystem": "testing"
       },
       {
+        "canonical": "transformers",
+        "aliases": [
+          "transformers framework",
+          "transformers library",
+          "transformers python"
+        ],
+        "ecosystem": "backend"
+      },
+      {
         "canonical": "typescript",
         "aliases": [
-          "ts",
           "tscript"
         ],
         "ecosystem": "backend"
+      },
+      {
+        "canonical": "three",
+        "aliases": [
+          "three.js",
+          "threejs"
+        ],
+        "ecosystem": "frontend"
       },
       {
         "canonical": "unity3d",
@@ -953,6 +1227,15 @@
         "ecosystem": "frontend"
       },
       {
+        "canonical": "visual studio code",
+        "aliases": [
+          "vscode",
+          "visual studio code",
+          "visual studio code editor"
+        ],
+        "ecosystem": "devops"
+      },
+      {
         "canonical": "vue",
         "aliases": [
           "vuejs",
@@ -967,6 +1250,21 @@
           "vue",
           "vuejs",
           "vjs"
+        ],
+        "ecosystem": "frontend"
+      },
+      {
+        "canonical": "web3",
+        "aliases": [
+          "web3.js",
+          "web3js"
+        ],
+        "ecosystem": "blockchain"
+      },
+      {
+        "canonical": "webgl",
+        "aliases": [
+          "webgl 3D"
         ],
         "ecosystem": "frontend"
       },
@@ -1030,6 +1328,15 @@
           "junit framework",
           "junit testing",
           "java unit testing"
+        ],
+        "ecosystem": "backend"
+      },
+      {
+        "canonical": "jupyter",
+        "aliases": [
+          "jupyter notebook",
+          "jupyter lab",
+          "jupyter notebook"
         ],
         "ecosystem": "backend"
       },
